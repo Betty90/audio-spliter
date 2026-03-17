@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import WaveSurfer from 'wavesurfer.js';
-import RegionsPlugin from 'wavesurfer.js/dist/plugins/regions.esm.js';
+import RegionsPlugin from 'wavesurfer.js/dist/plugins/regions.js';
 import { Play, Pause, SkipBack, SkipForward, ZoomIn, ZoomOut, Scissors, Save, Trash2, Merge, RefreshCw, Settings, Download, Loader2 } from 'lucide-react';
 import { AudioFile, AudioSegment } from '../types';
 import { SPEAKER_COLORS } from '../constants';
