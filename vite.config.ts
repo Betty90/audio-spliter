@@ -27,6 +27,7 @@ export default defineConfig(({ mode }) => {
       resolve: {
         alias: {
           '@': path.resolve(__dirname, '.'),
+          'wavesurfer.js/dist/plugins/regions.js': path.resolve(__dirname, 'node_modules/wavesurfer.js/dist/plugins/regions.js'),
         }
       }
     };
