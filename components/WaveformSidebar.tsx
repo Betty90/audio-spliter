@@ -538,13 +538,14 @@ const WaveformSidebar: React.FC<WaveformSidebarProps> = ({ file, onUpdateSegment
       setDownloadingId(id);
       try {
           const source = wavesurferRef.current?.getDecodedData() || file.file;
-          const blob = await extractAudioSegment(source, seg.start, seg.end);
+          const blob = await extractAudioSegment(source, seg.start, seg.end, file.name);
           const url = URL.createObjectURL(blob);
           const a = document.createElement('a');
           a.href = url;
-          // Format filename: originalName_speaker_start-end.wav
+          // Format filename: originalName_speaker_start-end.ext (保持原格式)
           const originalName = file.name.replace(/\.[^/.]+$/, "");
-          a.download = `${originalName}_${seg.speaker}_${seg.start.toFixed(1)}-${seg.end.toFixed(1)}.wav`;
+          const ext = file.name.split('.').pop() || 'wav';
+          a.download = `${originalName}_${seg.speaker}_${seg.start.toFixed(1)}-${seg.end.toFixed(1)}.${ext}`;
           document.body.appendChild(a);
           a.click();
           document.body.removeChild(a);
@@ -691,12 +692,14 @@ const WaveformSidebar: React.FC<WaveformSidebarProps> = ({ file, onUpdateSegment
         <div className="bg-white rounded-lg border border-gray-200 p-2 relative group shadow-sm">
             <div ref={containerRef} className="w-full overflow-x-auto" />
             
-            {/* Channel Labels */}
+            {/* Channel Labels - L在上方声道顶部，R在下方声道顶部 */}
             {isReady && channelCount > 1 && (
-                <div className="absolute left-2 top-2 flex flex-col gap-20 z-10 pointer-events-none">
-                    <span className="text-[10px] font-medium text-blue-500 bg-blue-50 px-1.5 py-0.5 rounded">L</span>
-                    <span className="text-[10px] font-medium text-emerald-500 bg-emerald-50 px-1.5 py-0.5 rounded">R</span>
-                </div>
+                <>
+                    <span className="absolute left-2 top-2 text-[10px] font-medium text-blue-500 bg-blue-50 px-1.5 py-0.5 rounded z-10 pointer-events-none">L</span>
+                    <span className="absolute left-2 top-[168px] text-[10px] font-medium text-emerald-500 bg-emerald-50 px-1.5 py-0.5 rounded z-10 pointer-events-none">R</span>
+                    {/* 声道分隔线 - 放在两个声道之间 */}
+                    <div className="absolute left-0 right-0 top-[168px] border-t border-dashed border-gray-200 z-10 pointer-events-none" />
+                </>
             )}
             
             {/* Loading Overlay */}
