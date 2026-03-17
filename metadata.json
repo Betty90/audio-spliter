@@ -1,0 +1,5 @@
+{
+  "name": "AudioSlicer AI",
+  "description": "An intelligent audio analysis tool that diarizes speakers, calculate response latencies, and provides an interactive waveform editor.",
+  "requestFramePermissions": []
+}

@@ -1,0 +1,425 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import { Upload, FileAudio, Settings as SettingsIcon, Loader2, Music4, AlertCircle, Link as LinkIcon, RefreshCw, Layers, Repeat, Trash2, Activity } from 'lucide-react';
+import { AudioFile, FileStatus, AudioSegment, AppSettings } from './types';
+import { analyzeAudio } from './services/apiService';
+import { DEFAULT_SETTINGS, ACCEPTED_MIME_TYPES } from './constants';
+import SettingsModal from './components/SettingsModal';
+import LabModal from './components/LabModal';
+import WaveformSidebar from './components/WaveformSidebar';
+import AnalysisTable from './components/AnalysisTable';
+import ConverterPage from './components/ConverterPage';
+import ConfirmDialog, { ConfirmConfig } from './components/ConfirmDialog';
+
+const App: React.FC = () => {
+  const [activeTab, setActiveTab] = useState<'analyzer' | 'converter'>('analyzer');
+  const [files, setFiles] = useState<AudioFile[]>([]);
+  const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isLabOpen, setIsLabOpen] = useState(false);
+  const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
+  const [editingSettingsFileId, setEditingSettingsFileId] = useState<string | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [backendHealthy, setBackendHealthy] = useState<boolean>(true);
+  const [confirmConfig, setConfirmConfig] = useState<ConfirmConfig>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {}
+  });
+
+  // --- Health Check ---
+  const checkHealth = useCallback(async () => {
+    try {
+      const response = await fetch(`${settings.backendUrl}/health`);
+      if (response.ok) {
+        const contentType = response.headers.get("content-type");
+        if (contentType && contentType.includes("application/json")) {
+            setBackendHealthy(true);
+        } else {
+            console.warn("Health check returned non-JSON response:", contentType);
+            setBackendHealthy(false);
+        }
+      } else {
+        setBackendHealthy(false);
+      }
+    } catch (e) {
+      setBackendHealthy(false);
+    }
+  }, [settings.backendUrl]);
+
+  useEffect(() => {
+    checkHealth();
+    // Poll every 30 seconds or when settings change
+    const interval = setInterval(checkHealth, 30000);
+    return () => clearInterval(interval);
+  }, [checkHealth]);
+
+  // --- File Handling ---
+
+  const analyze = async (file: AudioFile, config: AppSettings) => {
+      // Set status to ANALYZING
+      setFiles(prev => prev.map(f => f.id === file.id ? { ...f, status: FileStatus.ANALYZING, error: undefined } : f));
+
+      try {
+        const segments = await analyzeAudio(file.file, config);
+        setFiles(prev => prev.map(f => 
+            f.id === file.id 
+                ? { ...f, status: FileStatus.COMPLETED, segments } 
+                : f
+        ));
+        // If no file is selected, select this one (optional UX)
+        setSelectedFileId(prev => prev ? prev : file.id);
+      } catch (err: any) {
+        console.error("Analysis failed", err);
+        setFiles(prev => prev.map(f => 
+            f.id === file.id 
+                ? { ...f, status: FileStatus.ERROR, error: err.message || '分析失败' } 
+                : f
+        ));
+      }
+  };
+
+  const handleFileUpload = async (fileList: FileList | null) => {
+    if (!fileList) return;
+
+    // Create file objects
+    const newFiles: AudioFile[] = Array.from(fileList).map(file => ({
+      id: `file-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      file,
+      name: file.name,
+      blobUrl: URL.createObjectURL(file),
+      status: FileStatus.IDLE,
+      segments: [],
+    }));
+
+    // Add to state
+    setFiles(prev => [...prev, ...newFiles]);
+
+    // Trigger analysis immediately
+    newFiles.forEach(f => analyze(f, f.settings || settings));
+  };
+
+  const retryFile = (fileId: string) => {
+      const file = files.find(f => f.id === fileId);
+      if (file) {
+          analyze(file, file.settings || settings);
+      }
+  };
+
+  const handleDeleteFile = (e: React.MouseEvent, fileId: string) => {
+    e.stopPropagation(); // Prevent selecting the file when clicking delete
+    setConfirmConfig({
+      isOpen: true,
+      title: '确认删除',
+      message: '确定要删除这个音频文件及其分析结果吗？',
+      confirmText: '删除',
+      onConfirm: () => {
+        setFiles(prev => prev.filter(f => f.id !== fileId));
+        if (selectedFileId === fileId) {
+          setSelectedFileId(null);
+        }
+      }
+    });
+  };
+
+  const handleReanalyzeRequest = (fileId: string) => {
+    const file = files.find(f => f.id === fileId);
+    const hasCustomSettings = !!file?.settings;
+    
+    setConfirmConfig({
+      isOpen: true,
+      title: '重新分析',
+      message: `确定要使用${hasCustomSettings ? '该文件的专属配置' : '全局默认配置'}重新分析此音频吗？现有的片段修改将会丢失。`,
+      confirmText: '重新分析',
+      onConfirm: () => {
+        retryFile(fileId);
+      }
+    });
+  };
+
+  // --- Drag & Drop & Paste ---
+
+  const onDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const onDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+
+  const onDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    handleFileUpload(e.dataTransfer.files);
+  };
+
+  useEffect(() => {
+    const handlePaste = (e: ClipboardEvent) => {
+      if (e.clipboardData?.files.length) {
+        handleFileUpload(e.clipboardData.files);
+      }
+    };
+    window.addEventListener('paste', handlePaste);
+    return () => window.removeEventListener('paste', handlePaste);
+  }, [files, settings]); 
+
+  const [activeSegmentId, setActiveSegmentId] = useState<string | null>(null);
+
+  // ... existing code ...
+
+  const handleSegmentUpdate = useCallback((fileId: string, segments: AudioSegment[]) => {
+      setFiles(prev => prev.map(f => f.id === fileId ? { ...f, segments } : f));
+  }, []);
+
+  // --- Render ---
+
+  const activeFile = files.find(f => f.id === selectedFileId) || null;
+
+  return (
+    <div className="flex h-screen w-full flex-col bg-slate-50">
+      
+      {/* Header */}
+      <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-6 shadow-sm z-20">
+        <div className="flex items-center gap-2">
+            <div className="bg-blue-600 p-2 rounded-lg">
+                <Music4 className="text-white" size={20} />
+            </div>
+            <h1 className="text-xl font-bold text-slate-800 tracking-tight hidden md:block">AudioSlicer <span className="text-blue-600">Pro</span></h1>
+        </div>
+
+        {/* Navigation Tabs */}
+        <div className="flex bg-slate-100 p-1 rounded-lg">
+            <button
+                onClick={() => setActiveTab('analyzer')}
+                className={`flex items-center gap-2 px-4 py-1.5 rounded-md text-sm font-medium transition-all ${activeTab === 'analyzer' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+            >
+                <Layers size={16} />
+                分析
+            </button>
+            <button
+                onClick={() => setActiveTab('converter')}
+                className={`flex items-center gap-2 px-4 py-1.5 rounded-md text-sm font-medium transition-all ${activeTab === 'converter' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+            >
+                <Repeat size={16} />
+                转换
+            </button>
+        </div>
+
+        <div className="flex items-center gap-4">
+            <div className="text-sm text-slate-500 hidden md:block">
+                按 <kbd className="bg-slate-100 border border-slate-300 rounded px-1.5 py-0.5 text-xs mx-1">Cmd/Ctrl+V</kbd> 粘贴音频
+            </div>
+            <button 
+                onClick={() => setIsLabOpen(true)}
+                className="p-2 hover:bg-slate-100 rounded-full text-slate-600 transition-colors"
+                title="算法验证实验室"
+            >
+                <Activity size={20} />
+            </button>
+            <button 
+                onClick={() => setIsSettingsOpen(true)}
+                className="p-2 hover:bg-slate-100 rounded-full text-slate-600 transition-colors"
+                title="设置"
+            >
+                <SettingsIcon size={20} />
+            </button>
+        </div>
+      </header>
+      
+      {/* Health Warning Banner */}
+      {!backendHealthy && (
+        <div className="bg-red-50 border-b border-red-200 px-6 py-2 flex items-center justify-between text-sm text-red-700">
+            <div className="flex items-center gap-2">
+                <AlertCircle size={16} />
+                <span>无法连接到后端服务 ({settings.backendUrl === '/api' ? '代理到 5001 端口' : settings.backendUrl})。请确保 Python 服务正在运行。</span>
+            </div>
+            <button onClick={checkHealth} className="flex items-center gap-1 hover:underline font-medium">
+                <RefreshCw size={14} /> 重试
+            </button>
+        </div>
+      )}
+
+      <div className="flex flex-1 overflow-hidden relative">
+        
+        {activeTab === 'converter' ? (
+            <ConverterPage 
+                onBack={() => setActiveTab('analyzer')} 
+                existingFiles={files}
+            />
+        ) : (
+            <>
+                {/* Main Content Area */}
+                <main 
+                    className={`flex-1 flex flex-col p-6 overflow-hidden relative transition-all duration-300 ${isDragging ? 'bg-blue-50/50 ring-4 ring-blue-200 inset-0' : ''}`}
+                    onDragOver={onDragOver}
+                    onDragLeave={onDragLeave}
+                    onDrop={onDrop}
+                >
+                    {/* Toolbar / Upload Area */}
+                    <div className="mb-6 flex flex-wrap gap-4 items-center">
+                        <label className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-lg shadow-blue-200 cursor-pointer transition-transform active:scale-95 font-medium">
+                            <Upload size={18} />
+                            上传音频文件
+                            <input 
+                                type="file" 
+                                multiple 
+                                accept={Object.values(ACCEPTED_MIME_TYPES).flat().join(',')}
+                                className="hidden"
+                                onChange={(e) => handleFileUpload(e.target.files)}
+                            />
+                        </label>
+                        
+                        {/* Placeholder for URL input */}
+                        <div className="relative group hidden md:block">
+                            <div className="flex items-center border border-gray-300 rounded-xl bg-white px-3 py-2.5 w-64 focus-within:ring-2 focus-within:ring-blue-100 focus-within:border-blue-400 transition-all">
+                                <LinkIcon size={16} className="text-gray-400 mr-2" />
+                                <input 
+                                    type="text" 
+                                    placeholder="输入音频 URL (开发中)" 
+                                    disabled
+                                    className="bg-transparent border-none outline-none text-sm w-full text-gray-600 cursor-not-allowed" 
+                                />
+                            </div>
+                        </div>
+                        
+                        {files.length > 0 && (
+                             <div className="flex gap-2 overflow-x-auto pb-1 max-w-2xl px-2 scrollbar-thin">
+                                {files.map(file => (
+                                    <button
+                                        key={file.id}
+                                        onClick={() => setSelectedFileId(file.id)}
+                                        title={file.error || file.name}
+                                        className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm border whitespace-nowrap transition-all group
+                                            ${selectedFileId === file.id 
+                                                ? 'bg-blue-50 border-blue-200 text-blue-700 ring-2 ring-blue-100' 
+                                                : file.status === FileStatus.ERROR 
+                                                    ? 'bg-red-50 border-red-200 text-red-700 hover:bg-red-100'
+                                                    : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+                                    >
+                                        {file.status === FileStatus.ANALYZING ? (
+                                            <Loader2 size={14} className="animate-spin text-blue-500" />
+                                        ) : file.status === FileStatus.ERROR ? (
+                                            <AlertCircle size={14} className="text-red-500" />
+                                        ) : (
+                                            <FileAudio size={14} />
+                                        )}
+                                        <span className="truncate max-w-[100px]">{file.name}</span>
+                                        
+                                        {file.status === FileStatus.COMPLETED && (
+                                            <div 
+                                                onClick={(e) => { e.stopPropagation(); handleReanalyzeRequest(file.id); }}
+                                                className={`ml-1 p-1 rounded-full hover:bg-black/10 transition-all ${selectedFileId === file.id ? 'text-blue-400 hover:text-blue-600' : 'text-gray-300 hover:text-blue-500'}`}
+                                                title="重新分析"
+                                            >
+                                                <RefreshCw size={12} />
+                                            </div>
+                                        )}
+
+                                        <div 
+                                            onClick={(e) => handleDeleteFile(e, file.id)}
+                                            className={`ml-1 p-1 rounded-full hover:bg-black/10 transition-all ${selectedFileId === file.id ? 'text-blue-400 hover:text-red-600' : 'text-gray-300 hover:text-red-500'}`}
+                                            title="删除文件"
+                                        >
+                                            <Trash2 size={12} />
+                                        </div>
+                                    </button>
+                                ))}
+                             </div>
+                        )}
+                    </div>
+
+                    {/* Empty State */}
+                    {files.length === 0 && (
+                        <div className="flex-1 flex flex-col items-center justify-center border-2 border-dashed border-slate-300 rounded-2xl m-4 bg-slate-50/50 text-slate-400">
+                            <Upload size={64} className="mb-4 text-slate-300" />
+                            <h3 className="text-xl font-semibold text-slate-600 mb-2">拖拽音频文件到此处</h3>
+                            <p className="max-w-md text-center text-sm">
+                                支持 .mp3, .wav, .m4a, .mp4 等格式<br/>
+                                请确保后端服务 <code>python backend/server.py</code> 正在运行
+                            </p>
+                        </div>
+                    )}
+
+                    {/* Analysis Table */}
+                    {files.length > 0 && (
+                        <AnalysisTable 
+                            files={files} 
+                            activeSegmentId={activeSegmentId}
+                            onSegmentSelect={setActiveSegmentId}
+                        />
+                    )}
+
+                    {/* Error State Display - Removed or moved to sidebar/toast if needed, but for now relying on list status */}
+                    {/* {activeFile?.status === FileStatus.ERROR && ( ... )} */}
+                    
+                    {/* Drag Overlay */}
+                    {isDragging && (
+                        <div className="absolute inset-0 bg-blue-500/10 backdrop-blur-sm z-50 flex items-center justify-center border-4 border-blue-500 rounded-lg m-4">
+                            <div className="bg-white px-8 py-4 rounded-xl shadow-xl text-blue-600 font-bold text-lg animate-bounce">
+                                松开鼠标以上传
+                            </div>
+                        </div>
+                    )}
+                </main>
+
+                {/* Right Sidebar - Waveform Player */}
+                {selectedFileId && (
+                    <WaveformSidebar 
+                        file={activeFile} 
+                        onUpdateSegments={handleSegmentUpdate}
+                        onClose={() => setSelectedFileId(null)}
+                        activeSegmentId={activeSegmentId}
+                        onSegmentSelect={setActiveSegmentId}
+                        onReanalyze={handleReanalyzeRequest}
+                        onOpenSettings={setEditingSettingsFileId}
+                    />
+                )}
+            </>
+        )}
+      </div>
+
+      <ConfirmDialog 
+        config={confirmConfig} 
+        onClose={() => setConfirmConfig(prev => ({ ...prev, isOpen: false }))} 
+      />
+
+      <SettingsModal 
+        isOpen={isSettingsOpen || editingSettingsFileId !== null} 
+        title={editingSettingsFileId ? "文件专属配置" : "全局默认配置"}
+        onClose={() => {
+            setIsSettingsOpen(false);
+            setEditingSettingsFileId(null);
+        }}
+        settings={
+            editingSettingsFileId 
+                ? (files.find(f => f.id === editingSettingsFileId)?.settings || settings)
+                : settings
+        }
+        onReset={editingSettingsFileId ? () => {
+            setFiles(prev => prev.map(f => f.id === editingSettingsFileId ? { ...f, settings: undefined } : f));
+        } : undefined}
+        onSave={(newSettings) => {
+            if (editingSettingsFileId) {
+                setFiles(prev => prev.map(f => f.id === editingSettingsFileId ? { ...f, settings: newSettings } : f));
+            } else {
+                setSettings(newSettings);
+                // Re-check health when global settings change
+                setTimeout(checkHealth, 100);
+            }
+        }}
+      />
+      
+      <LabModal 
+        isOpen={isLabOpen}
+        onClose={() => setIsLabOpen(false)}
+        currentSegments={activeFile?.segments || []}
+        audioFile={activeFile?.file || null}
+        settings={activeFile?.settings || settings}
+      />
+    </div>
+  );
+};
+
+export default App;
