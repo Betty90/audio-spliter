@@ -1,5 +1,7 @@
 import { AppSettings } from './types';
 
+export const BACKEND_URL = '';  // 空字符串表示使用当前域名，Vite proxy 会处理 /api
+
 export const DEFAULT_SETTINGS: AppSettings = {
   minSegmentDuration: 0.5,
   backendUrl: '/api',
