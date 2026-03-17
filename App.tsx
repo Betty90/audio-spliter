@@ -259,7 +259,10 @@ const App: React.FC = () => {
                 >
                     {/* Toolbar / Upload Area */}
                     <div className="mb-6 flex flex-wrap gap-4 items-center">
-                        <label htmlFor="file-upload" className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-lg shadow-blue-200 cursor-pointer transition-transform active:scale-95 font-medium">
+                        <button 
+                            onClick={() => document.getElementById('file-upload')?.click()}
+                            className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-lg shadow-blue-200 cursor-pointer transition-transform active:scale-95 font-medium"
+                        >
                             <Upload size={18} />
                             上传音频文件
                             <input 
@@ -270,7 +273,7 @@ const App: React.FC = () => {
                                 className="hidden"
                                 onChange={(e) => handleFileUpload(e.target.files)}
                             />
-                        </label>
+                        </button>
                         
                         {/* Placeholder for URL input */}
                         <div className="relative group hidden md:block">
