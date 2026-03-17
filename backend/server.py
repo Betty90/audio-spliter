@@ -462,6 +462,117 @@ def upload_file():
         logging.error(f"Server Internal Error: {error_trace}")
         return jsonify({"error": f"Internal Server Error: {str(e)}\n\nTraceback:\n{error_trace}"}), 500
 
+@app.route('/export_segment', methods=['POST', 'OPTIONS'])
+def export_segment():
+    """
+    导出音频片段，保持原文件格式
+    前端传递: file (上传的原始音频文件), start, end, output_filename
+    """
+    if request.method == 'OPTIONS':
+        return jsonify({'status': 'ok'}), 200
+
+    if 'file' not in request.files:
+        return jsonify({"error": "没有上传文件"}), 400
+    
+    uploaded_file = request.files['file']
+    if uploaded_file.filename == '':
+        return jsonify({"error": "未选择文件"}), 400
+
+    # 获取起止时间
+    try:
+        start = float(request.form.get('start', 0))
+        end = float(request.form.get('end', 0))
+        if start >= end:
+            return jsonify({"error": "开始时间必须小于结束时间"}), 400
+    except ValueError:
+        return jsonify({"error": "时间参数无效"}), 400
+
+    temp_input = None
+    temp_output = None
+
+    try:
+        # 保存上传的文件到临时位置
+        input_ext = os.path.splitext(uploaded_file.filename)[1]
+        temp_input = tempfile.NamedTemporaryFile(delete=False, suffix=input_ext)
+        uploaded_file.save(temp_input.name)
+        temp_input.close()
+
+        # 生成输出文件名（保持原扩展名）
+        output_filename = request.form.get('output_filename', f'segment{input_ext}')
+        output_ext = os.path.splitext(output_filename)[1] or input_ext
+        temp_output = tempfile.NamedTemporaryFile(delete=False, suffix=output_ext)
+        temp_output.close()
+
+        # 构建 FFmpeg 命令
+        ffmpeg_path = FFMPEG_BINARY
+        duration = end - start
+        
+        # 判断是否为有损格式
+        lossy_formats = ['.mp3', '.m4a', '.aac', '.ogg', '.wma']
+        is_lossy = output_ext.lower() in lossy_formats
+
+        cmd = [
+            ffmpeg_path,
+            '-i', temp_input.name,
+            '-ss', str(start),
+            '-t', str(duration),
+            '-y',
+        ]
+
+        if is_lossy:
+            # 有损格式：使用高质量重新编码
+            cmd.extend(['-c:a', 'libmp3lame', '-q:a', '2'])
+        else:
+            # 无损格式：直接复制流
+            cmd.extend(['-c', 'copy'])
+
+        cmd.append(temp_output.name)
+
+        # 执行 FFmpeg
+        logging.info(f"Exporting segment: {' '.join(cmd)}")
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+
+        if result.returncode != 0:
+            logging.error(f"FFmpeg export error: {result.stderr}")
+            return jsonify({"error": f"导出失败: {result.stderr}"}), 500
+
+        return send_file(
+            temp_output.name,
+            mimetype=get_mime_type(output_ext),
+            as_attachment=True,
+            download_name=output_filename
+        )
+
+    except subprocess.TimeoutExpired:
+        logging.error("Export timed out")
+        return jsonify({"error": '导出超时'}), 504
+    except Exception as e:
+        logging.error(f"Export error: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+    finally:
+        # 清理输入临时文件
+        if temp_input and os.path.exists(temp_input.name):
+            try:
+                os.unlink(temp_input.name)
+            except Exception as e:
+                logging.error(f"Cleanup input error: {e}")
+        # 注意：输出文件由 send_file 处理，这里不删除
+
+def get_mime_type(ext):
+    """根据扩展名获取 MIME 类型"""
+    mime_types = {
+        '.mp3': 'audio/mpeg',
+        '.wav': 'audio/wav',
+        '.m4a': 'audio/mp4',
+        '.mp4': 'audio/mp4',
+        '.aac': 'audio/aac',
+        '.ogg': 'audio/ogg',
+        '.flac': 'audio/flac',
+        '.webm': 'audio/webm',
+        '.wma': 'audio/x-ms-wma',
+    }
+    return mime_types.get(ext.lower(), 'audio/wav')
+
 @app.route('/debug', methods=['GET'])
 def debug_info():
     return jsonify({
