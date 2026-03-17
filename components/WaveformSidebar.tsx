@@ -38,6 +38,9 @@ const WaveformSidebar: React.FC<WaveformSidebarProps> = ({ file, onUpdateSegment
     message: '',
     onConfirm: () => {}
   });
+  
+  // Audio channel info
+  const [channelCount, setChannelCount] = useState<number>(1);
 
   // Handle resizing
   useEffect(() => {
@@ -157,30 +160,13 @@ const WaveformSidebar: React.FC<WaveformSidebarProps> = ({ file, onUpdateSegment
       }
   }, [currentTime, isPlaying, localSegments, lastSelectedId, selectedSegments.size]);
 
-  // Sync local segments and regions when file changes
+  // Sync local segments when file changes (regions are handled in ready callback)
   useEffect(() => {
     if (file) {
       setLocalSegments(file.segments);
       setHasUnsavedChanges(false);
-
-      // Update regions if WaveSurfer is ready and matches current file
-      if (isReady && regionsRef.current && wsFileIdRef.current === file.id) {
-          regionsRef.current.clearRegions();
-          file.segments.forEach((seg) => {
-            const colorIndex = Math.abs(seg.speaker.length) % SPEAKER_COLORS.length;
-            regionsRef.current!.addRegion({
-              id: seg.id,
-              start: seg.start,
-              end: seg.end,
-              content: seg.speaker,
-              color: SPEAKER_COLORS[colorIndex],
-              drag: true,
-              resize: true,
-            });
-          });
-      }
     }
-  }, [file?.id, file?.segments, isReady]);
+  }, [file?.id, file?.segments]);
 
   // Initialize WaveSurfer
   useEffect(() => {
@@ -196,11 +182,21 @@ const WaveformSidebar: React.FC<WaveformSidebarProps> = ({ file, onUpdateSegment
       cursorColor: '#ef4444',
       barWidth: 2,
       barGap: 3,
-      height: 240,
+      height: channelCount > 1 ? 160 : 240,
       url: file.blobUrl,
       minPxPerSec: zoom,
       autoScroll: true,
       autoCenter: true,
+      splitChannels: channelCount > 1,
+      splitChannelsOptions: channelCount > 1 ? {
+        overlay: false,
+        channelColors: {
+          0: { progressColor: '#3b82f6', waveColor: '#93c5fd' },  // 左声道 - 蓝色
+          1: { progressColor: '#10b981', waveColor: '#6ee7b7' },  // 右声道 - 绿色
+        },
+        filterChannels: [],
+        relativeNormalization: true,
+      } : undefined,
     });
 
     const wsRegions = RegionsPlugin.create();
@@ -209,7 +205,37 @@ const WaveformSidebar: React.FC<WaveformSidebarProps> = ({ file, onUpdateSegment
     ws.on('ready', () => {
       setIsReady(true);
       setDuration(ws.getDuration());
-      // Regions are now handled by the other useEffect
+      
+      // 检测音频声道数，如果是第一次检测到多声道，需要重新初始化
+      const decodedData = ws.getDecodedData();
+      if (decodedData) {
+        const detectedChannels = decodedData.numberOfChannels;
+        console.log(`Audio channels detected: ${detectedChannels}, current: ${channelCount}`);
+        
+        // 如果检测到的声道数与当前配置不同，更新配置并重新初始化
+        if (detectedChannels !== channelCount) {
+          setChannelCount(detectedChannels);
+          // 不在这里添加 regions，因为组件会重新初始化
+          return;
+        }
+      }
+      
+      // 添加 regions（只有在声道配置正确时才执行）
+      if (regionsRef.current && file?.segments) {
+        regionsRef.current.clearRegions();
+        file.segments.forEach((seg) => {
+          const colorIndex = Math.abs(seg.speaker.length) % SPEAKER_COLORS.length;
+          regionsRef.current!.addRegion({
+            id: seg.id,
+            start: seg.start,
+            end: seg.end,
+            content: seg.speaker,
+            color: SPEAKER_COLORS[colorIndex],
+            drag: true,
+            resize: true,
+          });
+        });
+      }
     });
 
     ws.on('play', () => setIsPlaying(true));
@@ -256,7 +282,7 @@ const WaveformSidebar: React.FC<WaveformSidebarProps> = ({ file, onUpdateSegment
       wavesurferRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [file?.id]);
+  }, [file?.id, channelCount]);
 
   // Handle Zoom updates
   useEffect(() => {
@@ -664,6 +690,14 @@ const WaveformSidebar: React.FC<WaveformSidebarProps> = ({ file, onUpdateSegment
         {/* Waveform Container */}
         <div className="bg-white rounded-lg border border-gray-200 p-2 relative group shadow-sm">
             <div ref={containerRef} className="w-full overflow-x-auto" />
+            
+            {/* Channel Labels */}
+            {isReady && channelCount > 1 && (
+                <div className="absolute left-2 top-2 flex flex-col gap-20 z-10 pointer-events-none">
+                    <span className="text-[10px] font-medium text-blue-500 bg-blue-50 px-1.5 py-0.5 rounded">L</span>
+                    <span className="text-[10px] font-medium text-emerald-500 bg-emerald-50 px-1.5 py-0.5 rounded">R</span>
+                </div>
+            )}
             
             {/* Loading Overlay */}
             {!isReady && (
