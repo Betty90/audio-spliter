@@ -160,10 +160,6 @@ audio-spliter/
 4. 推送到分支 (`git push origin feature/amazing-feature`)
 5. 打开 Pull Request
 
-## 📄 许可证
-
-[MIT](LICENSE)
-
 ## 🙏 致谢
 
 - [wavesurfer.js](https://wavesurfer-js.org/) - 音频波形可视化
