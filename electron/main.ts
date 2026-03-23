@@ -1,8 +1,12 @@
 import { app, BrowserWindow, ipcMain, shell } from 'electron';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import { getPythonPort, stopPythonProcess, waitForPython, setShuttingDown } from './python-manager.js';
 import { logInfo, logError } from './logger.js';
 import { initUpdater, checkForUpdatesOnStartup } from './updater.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 let mainWindow: BrowserWindow | null = null;
 let loadingWindow: BrowserWindow | null = null;
