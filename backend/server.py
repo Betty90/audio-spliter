@@ -36,12 +36,21 @@ app = Flask(__name__)
 # Find ffmpeg binary and add to PATH for librosa/audioread
 def setup_ffmpeg():
     ffmpeg_path = "ffmpeg"  # Default to system ffmpeg
+
+    # Get base directory - for PyInstaller bundled app, use sys._MEIPASS
+    # otherwise use current working directory
+    if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+        # Running in a PyInstaller bundle
+        base_dir = sys._MEIPASS
+    else:
+        # Running in a normal Python environment
+        base_dir = os.getcwd()
+
     possible_paths = [
+        os.path.join(base_dir, "node_modules", "ffmpeg-static", "ffmpeg"),
+        os.path.join(base_dir, "_internal", "node_modules", "ffmpeg-static", "ffmpeg"),
         os.path.join(os.getcwd(), "node_modules", "ffmpeg-static", "ffmpeg"),
         os.path.join(os.getcwd(), "..", "node_modules", "ffmpeg-static", "ffmpeg"),
-        os.path.join(
-            os.getcwd(), "_internal", "node_modules", "ffmpeg-static", "ffmpeg"
-        ),
         "/node_modules/ffmpeg-static/ffmpeg",
         "/app/node_modules/ffmpeg-static/ffmpeg",
     ]
