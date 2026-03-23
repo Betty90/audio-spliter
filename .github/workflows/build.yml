@@ -76,6 +76,12 @@ jobs:
         run: |
           chmod +x scripts/build-python.sh
           ./scripts/build-python.sh
+          mkdir -p resources/server
+          if [ -d "dist/server" ]; then
+            cp -r dist/server/* resources/server/
+          elif [ -d "backend/dist/server" ]; then
+            cp -r backend/dist/server/* resources/server/
+          fi
         continue-on-error: true
 
       - name: Build Python backend (Windows)
