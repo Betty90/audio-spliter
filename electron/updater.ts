@@ -1,5 +1,5 @@
 import { app, dialog } from 'electron';
-import { logInfo, logError, logWarn } from './logger';
+import { logInfo, logError, logWarn } from './logger.js';
 import { autoUpdater as electronAutoUpdater, type UpdateInfo } from 'electron-updater';
 
 let isUpdateChecking = false;

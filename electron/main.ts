@@ -1,8 +1,8 @@
 import { app, BrowserWindow, ipcMain, shell } from 'electron';
 import path from 'path';
-import { getPythonPort, stopPythonProcess, waitForPython, setShuttingDown } from './python-manager';
-import { logInfo, logError } from './logger';
-import { initUpdater, checkForUpdatesOnStartup } from './updater';
+import { getPythonPort, stopPythonProcess, waitForPython, setShuttingDown } from './python-manager.js';
+import { logInfo, logError } from './logger.js';
+import { initUpdater, checkForUpdatesOnStartup } from './updater.js';
 
 let mainWindow: BrowserWindow | null = null;
 let loadingWindow: BrowserWindow | null = null;

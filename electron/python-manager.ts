@@ -2,7 +2,7 @@ import { spawn, ChildProcess } from 'child_process';
 import http from 'http';
 import path from 'path';
 import { app, dialog } from 'electron';
-import { logInfo, logWarn, logError } from './logger';
+import { logInfo, logWarn, logError } from './logger.js';
 
 let pythonProcess: ChildProcess | null = null;
 let pythonPort: number | null = null;
