@@ -65,7 +65,7 @@ fi
 echo -e "${GREEN}✓ pip found${NC}"
 
 # Check if running in virtual environment
-if [ -z "${VIRTUAL_ENV}" ]; then
+if [ -z "${VIRTUAL_ENV}" ] && [ -z "${CI}" ]; then
     echo -e "${YELLOW}⚠ Not running in virtual environment. It's recommended to use venv.${NC}"
     read -p "Continue anyway? (y/N) " -n 1 -r
     echo
@@ -75,6 +75,8 @@ if [ -z "${VIRTUAL_ENV}" ]; then
         echo "  source venv/bin/activate"
         exit 1
     fi
+elif [ -n "${CI}" ]; then
+    echo -e "${YELLOW}⚠ Not running in virtual environment, but CI detected. Continuing...${NC}"
 fi
 
 echo ""
