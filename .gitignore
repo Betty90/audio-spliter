@@ -60,3 +60,6 @@ backend/temp/
 Thumbs.db
 
 AGENTS.md
+
+# OhMyOpenCode generated files
+.sisyphus/
