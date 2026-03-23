@@ -59,9 +59,11 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ffmpeg libsndfile1
 
+      - name: Remove package-lock.json (fix cross-platform deps)
+        run: rm -f package-lock.json
+
       - name: Install Node dependencies
-        run: |
-          npm ci || npm install
+        run: npm install
 
       - name: Install Python dependencies
         run: |
