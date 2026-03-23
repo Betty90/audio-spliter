@@ -39,6 +39,9 @@ def setup_ffmpeg():
     possible_paths = [
         os.path.join(os.getcwd(), "node_modules", "ffmpeg-static", "ffmpeg"),
         os.path.join(os.getcwd(), "..", "node_modules", "ffmpeg-static", "ffmpeg"),
+        os.path.join(
+            os.getcwd(), "_internal", "node_modules", "ffmpeg-static", "ffmpeg"
+        ),
         "/node_modules/ffmpeg-static/ffmpeg",
         "/app/node_modules/ffmpeg-static/ffmpeg",
     ]
