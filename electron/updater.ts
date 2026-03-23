@@ -1,6 +1,8 @@
 import { app, dialog } from 'electron';
 import { logInfo, logError, logWarn } from './logger.js';
-import { autoUpdater as electronAutoUpdater, type UpdateInfo } from 'electron-updater';
+import electronUpdater from 'electron-updater';
+const { autoUpdater: electronAutoUpdater } = electronUpdater;
+import type { UpdateInfo } from 'electron-updater';
 
 let isUpdateChecking = false;
 let isSilent = false;
