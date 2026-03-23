@@ -187,6 +187,7 @@ const WaveformSidebar: React.FC<WaveformSidebarProps> = ({ file, onUpdateSegment
       minPxPerSec: zoom,
       autoScroll: true,
       autoCenter: true,
+      // @ts-ignore - wavesurfer.js type definition mismatch
       splitChannels: channelCount > 1,
       splitChannelsOptions: channelCount > 1 ? {
         overlay: false,
