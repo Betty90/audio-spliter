@@ -60,6 +60,7 @@ jobs:
           sudo apt-get install -y ffmpeg libsndfile1
 
       - name: Remove package-lock.json (fix cross-platform deps)
+        shell: bash
         run: rm -f package-lock.json
 
       - name: Install Node dependencies
