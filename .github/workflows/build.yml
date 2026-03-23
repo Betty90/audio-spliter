@@ -60,7 +60,8 @@ jobs:
           sudo apt-get install -y ffmpeg libsndfile1
 
       - name: Install Node dependencies
-        run: npm ci
+        run: |
+          npm ci || npm install
 
       - name: Install Python dependencies
         run: |
@@ -77,7 +78,12 @@ jobs:
       - name: Build Python backend (Windows)
         if: matrix.platform == 'win'
         run: |
-          scripts\build-python.bat
+          pip install pyinstaller
+          cd backend
+          pyinstaller server.spec --clean --noconfirm
+          cd ..
+          mkdir -p resources
+          if exist backend\dist\server xcopy /E /I backend\dist\server resources\server
         shell: cmd
         continue-on-error: true
 
