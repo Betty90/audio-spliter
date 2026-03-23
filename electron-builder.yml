@@ -116,12 +116,6 @@ publish:
   owner: Betty90
   repo: audio-spliter
   releaseType: release
-  publishAutoUpdate: true
-# Auto-update Configuration
-electronUpdater:
-  checkForUpdates: true
-  autoDownload: true
-  autoInstallOnAppQuit: true
 # Compression
 compression: maximum
 asar: true
