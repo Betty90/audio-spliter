@@ -1,0 +1,131 @@
+appId: com.audioslicer.app
+productName: AudioSlicer AI
+copyright: Copyright © 2025 AudioSlicer AI
+directories:
+  output: release
+  buildResources: assets
+files:
+  - dist/**/*
+  - electron/dist/**/*
+  - package.json
+extraResources:
+  - from: backend/
+    to: backend
+    filter:
+      - "**/*"
+  - from: python-dist/
+    to: python-dist
+    filter:
+      - "**/*"
+  - from: resources/
+    to: resources
+    filter:
+      - "**/*"
+# macOS Configuration
+mac:
+  category: public.app-category.music
+  icon: assets/icons/icon.icns
+  target:
+    - target: dmg
+      arch:
+        - x64
+        - arm64
+    - target: zip
+      arch:
+        - x64
+        - arm64
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: assets/entitlements.mac.plist
+  entitlementsInherit: assets/entitlements.mac.plist
+  darkModeSupport: true
+# macOS DMG
+dmg:
+  contents:
+    - x: 130
+      y: 220
+    - x: 410
+      y: 220
+      type: link
+      path: /Applications
+  window:
+    width: 540
+    height: 380
+  backgroundColor: "#1a1a1a"
+# Windows Configuration
+win:
+  icon: assets/icons/icon.ico
+  target:
+    - target: nsis
+      arch:
+        - x64
+        - ia32
+    - target: portable
+      arch:
+        - x64
+# Windows NSIS Installer
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: AudioSlicer AI
+  include: assets/nsis/installer.nsh
+  license: LICENSE
+  artifactName: "${productName}-${version}-Setup.${ext}"
+# Linux Configuration
+linux:
+  icon: assets/icons/icon.png
+  category: AudioVideo
+  target:
+    - target: AppImage
+      arch:
+        - x64
+    - target: deb
+      arch:
+        - x64
+  maintainer: AudioSlicer AI Team
+  synopsis: Intelligent Audio Slicing and Speaker Diarization Tool
+  description: |
+    AudioSlicer AI is an intelligent audio slicing and speaker diarization tool
+    based on machine learning algorithms. It automatically identifies different
+    speakers in audio files and supports visual editing and segment export.
+  mimeTypes:
+    - audio/mpeg
+    - audio/wav
+    - audio/x-wav
+    - audio/mp4
+    - audio/x-m4a
+    - audio/ogg
+    - audio/aac
+  desktop:
+    Name: AudioSlicer AI
+    Comment: Intelligent Audio Slicing Tool
+    Categories: AudioVideo;Audio;
+    MimeType: audio/mpeg;audio/wav;audio/x-wav;audio/mp4;audio/x-m4a;
+# DEB specific
+deb:
+  priority: optional
+  depends:
+    - python3
+    - python3-pip
+    - ffmpeg
+# Publish Configuration (GitHub Releases)
+publish:
+  provider: github
+  owner: Betty90
+  repo: audio-spliter
+  releaseType: release
+  publishAutoUpdate: true
+# Auto-update Configuration
+electronUpdater:
+  checkForUpdates: true
+  autoDownload: true
+  autoInstallOnAppQuit: true
+# Compression
+compression: maximum
+asar: true
+asarUnpack:
+  - "**/*.node"
+  - "backend/**/*"
+  - "python-dist/**/*"

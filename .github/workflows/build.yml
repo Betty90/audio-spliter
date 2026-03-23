@@ -1,0 +1,190 @@
+name: Build and Release
+
+on:
+  push:
+    branches: [main, master]
+    tags: ['v*']
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: 'Publish to GitHub Releases'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  NODE_VERSION: '20'
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest, ubuntu-latest]
+        include:
+          - os: macos-latest
+            platform: mac
+          - os: windows-latest
+            platform: win
+          - os: ubuntu-latest
+            platform: linux
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install system dependencies (macOS)
+        if: matrix.platform == 'mac'
+        run: |
+          brew install ffmpeg
+
+      - name: Install system dependencies (Ubuntu)
+        if: matrix.platform == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg libsndfile1
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Install Python dependencies
+        run: |
+          pip install pyinstaller
+          pip install flask librosa numpy scikit-learn soundfile scipy audioread
+
+      - name: Build Python backend (Unix)
+        if: matrix.platform != 'win'
+        run: |
+          chmod +x scripts/build-python.sh
+          ./scripts/build-python.sh
+        continue-on-error: true
+
+      - name: Build Python backend (Windows)
+        if: matrix.platform == 'win'
+        run: |
+          scripts\build-python.bat
+        shell: cmd
+        continue-on-error: true
+
+      - name: Build frontend and Electron
+        run: |
+          npm run build
+          npm run electron:build
+
+      - name: Build and package (macOS)
+        if: matrix.platform == 'mac'
+        run: |
+          npm run electron:pack -- --mac
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+
+      - name: Build and package (Windows)
+        if: matrix.platform == 'win'
+        run: |
+          npm run electron:pack -- --win
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and package (Linux)
+        if: matrix.platform == 'linux'
+        run: |
+          npm run electron:pack -- --linux
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.platform }}-artifacts
+          path: |
+            release/*.dmg
+            release/*.zip
+            release/*.exe
+            release/*.AppImage
+            release/*.deb
+          if-no-files-found: warn
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && github.event.inputs.publish == 'true')
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          pattern: '*-artifacts'
+
+      - name: List artifacts
+        run: |
+          find artifacts -type f -name "*.*"
+
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref_name }}
+          release_name: AudioSlicer AI ${{ github.ref_name }}
+          draft: true
+          prerelease: ${{ contains(github.ref_name, 'beta') || contains(github.ref_name, 'alpha') }}
+          body: |
+            ## AudioSlicer AI ${{ github.ref_name }}
+
+            ### Downloads
+            - **macOS**: Download `.dmg` for Intel Macs, `.zip` for Apple Silicon Macs
+            - **Windows**: Download `Setup.exe` for installer or `portable.exe` for portable version
+            - **Linux**: Download `.AppImage` for universal Linux package or `.deb` for Debian/Ubuntu
+
+            ### What's New
+            See [CHANGELOG.md](CHANGELOG.md) for details.
+
+            ### System Requirements
+            - **macOS**: macOS 10.14+ (Mojave or later)
+            - **Windows**: Windows 10/11 (64-bit)
+            - **Linux**: Ubuntu 20.04+, Fedora 34+, or equivalent
+
+      - name: Upload Release Assets
+        run: |
+          for file in artifacts/*-artifacts/*; do
+            if [ -f "$file" ]; then
+              echo "Uploading: $file"
+              gh release upload "${{ github.ref_name }}" "$file" --clobber
+            fi
+          done
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        continue-on-error: true
+
+  notify:
+    needs: [build, release]
+    runs-on: ubuntu-latest
+    if: always() && (needs.release.result == 'success' || needs.build.result == 'success')
+
+    steps:
+      - name: Build Success Notification
+        run: |
+          echo "✅ Build completed successfully!"
+          echo "Platform builds: ${{ needs.build.result }}"
+          echo "Release creation: ${{ needs.release.result }}"
