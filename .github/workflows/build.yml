@@ -76,13 +76,29 @@ jobs:
         run: |
           chmod +x scripts/build-python.sh
           ./scripts/build-python.sh
+        continue-on-error: true
+
+      - name: Copy Python backend to resources (Unix)
+        if: matrix.platform != 'win'
+        run: |
+          echo "Creating resources/server directory..."
           mkdir -p resources/server
+          echo "Checking for PyInstaller output..."
           if [ -d "dist/server" ]; then
+            echo "✓ Found dist/server, copying to resources/server/..."
             cp -r dist/server/* resources/server/
           elif [ -d "backend/dist/server" ]; then
+            echo "✓ Found backend/dist/server, copying to resources/server/..."
             cp -r backend/dist/server/* resources/server/
+          else
+            echo "⚠ Warning: Neither dist/server nor backend/dist/server found"
+            echo "Listing backend/dist contents:"
+            ls -la backend/dist/ 2>/dev/null || echo "backend/dist does not exist"
+            echo "Listing dist contents:"
+            ls -la dist/ 2>/dev/null || echo "dist does not exist"
           fi
-        continue-on-error: true
+          echo "Final contents of resources/server:"
+          ls -la resources/server/ 2>/dev/null || echo "resources/server is empty"
 
       - name: Build Python backend (Windows)
         if: matrix.platform == 'win'
