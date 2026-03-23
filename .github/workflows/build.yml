@@ -71,6 +71,11 @@ jobs:
           pip install pyinstaller
           pip install flask librosa numpy scikit-learn soundfile scipy audioread
 
+      - name: Build frontend and Electron
+        run: |
+          npm run build
+          npm run electron:build
+
       - name: Build Python backend (Unix)
         if: matrix.platform != 'win'
         run: |
@@ -111,11 +116,6 @@ jobs:
           if exist backend\dist\server xcopy /E /I backend\dist\server resources\server
         shell: cmd
         continue-on-error: true
-
-      - name: Build frontend and Electron
-        run: |
-          npm run build
-          npm run electron:build
 
       - name: Build and package (macOS)
         if: matrix.platform == 'mac'
