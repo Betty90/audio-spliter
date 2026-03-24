@@ -21,8 +21,8 @@ NC='\033[0m' # No Color
 # Configuration
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BACKEND_DIR="$PROJECT_ROOT/backend"
-DIST_DIR="$PROJECT_ROOT/dist"
-BUILD_DIR="$PROJECT_ROOT/build"
+DIST_DIR="$PROJECT_ROOT/py-dist"
+BUILD_DIR="$PROJECT_ROOT/py-build"
 SPECFILE="$BACKEND_DIR/server.spec"
 
 # Detect platform
@@ -136,10 +136,6 @@ echo -e "${GREEN}✓ Build completed successfully!${NC}"
 # Find the output directory
 if [ -d "$DIST_DIR/server" ]; then
     OUTPUT_DIR="$DIST_DIR/server"
-elif [ -d "$BACKEND_DIR/dist/server" ]; then
-    OUTPUT_DIR="$BACKEND_DIR/dist/server"
-    # Move to project root dist
-    mv "$BACKEND_DIR/dist" "$PROJECT_ROOT/"
 else
     echo -e "${YELLOW}⚠ Could not find output directory, checking alternatives...${NC}"
     find "$PROJECT_ROOT" -name "server" -type f -executable 2>/dev/null | head -5

@@ -38,6 +38,10 @@ else:
 
 PROJECT_ROOT = os.path.abspath(os.path.join(SPEC_DIR, '..'))
 
+# Set PyInstaller output directories to avoid conflicts with frontend dist/
+build_dir = os.path.join(PROJECT_ROOT, 'py-build')
+dist_dir = os.path.join(PROJECT_ROOT, 'py-dist')
+
 # FFmpeg binary path
 if IS_WINDOWS:
     FFMPEG_BINARY = os.path.join(PROJECT_ROOT, 'node_modules', 'ffmpeg-static', 'ffmpeg.exe')
@@ -293,6 +297,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    build_dir=build_dir,
 )
 
 # Collect everything into a directory (onedir mode)
@@ -303,7 +308,8 @@ coll = COLLECT(
     a.datas,
     strip=True,
     upx=True,
-    name='server'
+    name='server',
+    dist_dir=dist_dir
 )
 
 # macOS app bundle configuration (optional)
