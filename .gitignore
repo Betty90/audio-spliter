@@ -63,3 +63,9 @@ AGENTS.md
 
 # OhMyOpenCode generated files
 .sisyphus/
+release/
+*.dmg
+*.dmg.blockmap
+py-dist/
+backend/dist/
+backend/build/
