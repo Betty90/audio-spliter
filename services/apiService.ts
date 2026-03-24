@@ -53,10 +53,8 @@ async function getApiBaseUrl(settings?: AppSettings): Promise<string> {
     }
   }
 
-  if (typeof window !== 'undefined') {
-    return `${window.location.protocol}//${window.location.host}`;
-  }
-
+  // In Electron packaged app, window.location uses file:// protocol
+  // which won't work for API calls. Always use localhost.
   return 'http://localhost:5001';
 }
 

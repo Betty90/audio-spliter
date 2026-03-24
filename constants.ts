@@ -4,7 +4,7 @@ export const BACKEND_URL = '';  // 空字符串表示使用当前域名，Vite p
 
 export const DEFAULT_SETTINGS: AppSettings = {
   minSegmentDuration: 0.5,
-  backendUrl: '/api',
+  backendUrl: '', // Empty to let getApiBaseUrl determine the URL (localhost for Electron)
   numSpeakers: 2,
   silenceThreshold: 0.005,
   smoothingWidth: 5,
