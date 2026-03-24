@@ -75,13 +75,14 @@ function createWindow(): void {
 
   if (isDev) {
     mainWindow.loadURL('http://localhost:3001');
-    mainWindow.webContents.openDevTools({ mode: 'bottom' });
   } else {
     // In packaged app, files are in app.asar:
     // - electron/dist/main.js (this file)
     // - dist/index.html (frontend)
     mainWindow.loadFile(path.join(__dirname, '../../dist/index.html'));
   }
+  // Open DevTools for debugging (remove in production)
+  mainWindow.webContents.openDevTools({ mode: 'bottom' });
 
   mainWindow.once('ready-to-show', () => {
     mainWindow?.show();
