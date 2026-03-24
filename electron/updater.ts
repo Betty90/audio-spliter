@@ -131,19 +131,12 @@ export async function checkForUpdates(silent = false): Promise<void> {
 }
 
 /**
- * Check for updates on startup (delayed)
- * Waits 5 seconds after app startup before checking
+ * Check for updates on startup (disabled)
+ * Auto-updater is disabled to prevent GitHub 404 errors
  */
 export function checkForUpdatesOnStartup(): void {
-  if (!app.isPackaged) {
-    logWarn('[Updater] Skipping startup update check in development mode');
-    return;
-  }
-
-  // Delay the update check by 5 seconds to not slow down app startup
-  setTimeout(() => {
-    checkForUpdates(true);
-  }, 5000);
+  logInfo('[Updater] Auto-updater is disabled');
+  return;
 }
 
 /**

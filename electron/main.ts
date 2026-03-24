@@ -81,8 +81,7 @@ function createWindow(): void {
     // - dist/index.html (frontend)
     mainWindow.loadFile(path.join(__dirname, '../../dist/index.html'));
   }
-  // Open DevTools for debugging (remove in production)
-  mainWindow.webContents.openDevTools({ mode: 'bottom' });
+  // DevTools disabled for production
 
   mainWindow.once('ready-to-show', () => {
     mainWindow?.show();
@@ -103,7 +102,12 @@ function createWindow(): void {
 }
 
 app.whenReady().then(async () => {
-  ipcMain.handle('get-python-port', () => getPythonPort());
+  ipcMain.handle('get-python-port', async () => {
+    if (!getPythonPort()) {
+      await waitForPython();
+    }
+    return getPythonPort();
+  });
 
   loadingWindow = createLoadingWindow();
 

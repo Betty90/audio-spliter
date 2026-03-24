@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Upload, FileAudio, Settings as SettingsIcon, Loader2, Music4, AlertCircle, Link as LinkIcon, RefreshCw, Layers, Repeat, Trash2, Activity } from 'lucide-react';
 import { AudioFile, FileStatus, AudioSegment, AppSettings } from './types';
-import { analyzeAudio } from './services/apiService';
+import { analyzeAudio, checkHealth as checkBackendHealth } from './services/apiService';
 import { DEFAULT_SETTINGS, ACCEPTED_MIME_TYPES } from './constants';
 import SettingsModal from './components/SettingsModal';
 import LabModal from './components/LabModal';
@@ -30,22 +30,12 @@ const App: React.FC = () => {
   // --- Health Check ---
   const checkHealth = useCallback(async () => {
     try {
-      const response = await fetch(`${settings.backendUrl}/health`);
-      if (response.ok) {
-        const contentType = response.headers.get("content-type");
-        if (contentType && contentType.includes("application/json")) {
-            setBackendHealthy(true);
-        } else {
-            console.warn("Health check returned non-JSON response:", contentType);
-            setBackendHealthy(false);
-        }
-      } else {
-        setBackendHealthy(false);
-      }
+      await checkBackendHealth(settings);
+      setBackendHealthy(true);
     } catch (e) {
       setBackendHealthy(false);
     }
-  }, [settings.backendUrl]);
+  }, [settings]);
 
   useEffect(() => {
     checkHealth();
