@@ -1,13 +1,5 @@
-import { contextBridge, ipcRenderer } from 'electron';
+const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('electron', {
   getPythonPort: () => ipcRenderer.invoke('get-python-port'),
 });
-
-declare global {
-  interface Window {
-    electron: {
-      getPythonPort: () => Promise<number>;
-    };
-  }
-}
