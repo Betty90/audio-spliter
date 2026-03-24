@@ -1,6 +1,6 @@
 # AudioSlicer AI 🎵
 
-智能音频切片与说话人分割工具，基于机器学习算法自动识别音频中的不同说话人，支持可视化编辑和片段导出。
+智能音频切片与说话人分割桌面应用，基于机器学习算法自动识别音频中的不同说话人，支持可视化编辑和片段导出。完全离线运行，无需网络连接。
 
 ![AudioSlicer AI](https://github.com/user-attachments/assets/placeholder-screenshot.png)
 
@@ -29,30 +29,41 @@
 - 分析说话人切换的响应延迟
 - 支持导出分析结果到 Excel
 
+### 🖥️ 桌面应用特性
+- **完全离线**：无需网络连接，所有处理本地完成
+- **跨平台**：支持 macOS、Windows、Linux
+- **自动更新**：内置更新检查（可配置）
+- **原生体验**：系统级文件拖拽、快捷键支持
+
 ## 🛠️ 技术栈
 
 ### 前端
 - **React 19** + **TypeScript**
 - **Vite** 构建工具
-- **Tailwind CSS** 样式框架
+- **Tailwind CSS v4** 样式框架
 - **wavesurfer.js** 音频可视化
 - **lucide-react** 图标库
 
 ### 后端
-- **Python Flask** Web 框架
+- **Python Flask** Web 框架（打包在应用内）
 - **librosa** 音频特征提取
 - **scikit-learn** 机器学习聚类
 - **ffmpeg-static** 音频处理
 - **soundfile** 音频文件读写
 
+### 桌面框架
+- **Electron 35** 桌面应用框架
+- **electron-builder** 应用打包
+- **PyInstaller** Python后端打包
+
 ## 🚀 快速开始
 
 ### 环境要求
 - **Node.js** 18+ 
-- **Python** 3.9+
+- **Python** 3.9+（仅开发时需要）
 - **npm** 或 **yarn**
 
-### 安装步骤
+### 开发模式
 
 1. 克隆仓库
 ```bash
@@ -60,38 +71,54 @@ git clone git@github.com:Betty90/audio-spliter.git
 cd audio-spliter
 ```
 
-2. 安装前端依赖
+2. 安装依赖
 ```bash
 npm install
 ```
 
-3. 安装 Python 依赖
-```bash
-pip install flask librosa numpy scikit-learn soundfile scipy audioread
-# 或使用 conda
-conda install flask librosa numpy scikit-learn soundfile scipy audioread
-```
-
-4. 启动开发服务器
+3. 启动开发服务器
 ```bash
 npm run dev
 ```
 
 这将同时启动前端开发服务器（Vite）和后端 API 服务器（Flask）。
 
-### 访问应用
-打开浏览器访问 http://localhost:3001
+4. 访问应用
+开发模式下打开浏览器访问 http://localhost:3001
+
+### 构建桌面应用
+
+#### macOS
+```bash
+npm run electron:pack:mac
+```
+构建产物：`release/AudioSlicer AI-1.0.0-arm64.dmg`
+
+#### Windows
+```bash
+npm run electron:pack:win
+```
+
+#### Linux
+```bash
+npm run electron:pack:linux
+```
+
+#### 全平台构建
+```bash
+npm run build:all
+```
 
 ## 📖 使用指南
 
 ### 1. 上传音频
 - 点击"上传音频文件"按钮
-- 或直接将音频文件拖拽到页面
+- 或直接将音频文件拖拽到应用窗口
 - 支持格式：MP3, WAV, M4A, MP4, AAC, OGG
 
 ### 2. 自动分析
 - 上传后自动进行说话人分割
-- 等待 AI 分析完成
+- 等待 AI 分析完成（5-10分钟音频约需10-30秒）
 - 在右侧查看检测到的片段列表
 
 ### 3. 编辑片段
@@ -104,6 +131,7 @@ npm run dev
 ### 4. 导出片段
 - 点击片段右侧的下载图标
 - 片段将以原格式导出（保持 MP3/WAV 等格式）
+- 导出文件保存在系统下载目录
 
 ### 5. 分析时延
 - 在左侧表格查看音色切换的响应时延
@@ -133,6 +161,11 @@ audio-spliter/
 │   ├── SettingsModal.tsx      # 设置面板
 │   ├── ConverterPage.tsx      # 格式转换页面
 │   └── ...
+├── electron/              # Electron 主进程
+│   ├── main.ts            # 主进程入口
+│   ├── python-manager.ts  # Python 进程管理
+│   ├── preload.js         # 预加载脚本
+│   └── updater.ts         # 自动更新逻辑
 ├── utils/                 # 工具函数
 │   └── audioUtils.ts      # 音频处理工具
 ├── types.ts               # TypeScript 类型定义
@@ -141,16 +174,28 @@ audio-spliter/
 └── package.json
 ```
 
-## 🔧 API 接口
+## 🔧 开发脚本
 
-### POST /upload
-上传音频文件进行说话人分割分析
+| 命令 | 说明 |
+|------|------|
+| `npm run dev` | 启动开发模式（前端 + Python后端） |
+| `npm run build` | 构建前端生产版本 |
+| `npm run electron:build` | 构建 Electron 主进程 |
+| `npm run build:python` | 构建 Python 后端（PyInstaller） |
+| `npm run electron:pack:mac` | 打包 macOS 应用 |
+| `npm run electron:pack:win` | 打包 Windows 应用 |
+| `npm run electron:pack:linux` | 打包 Linux 应用 |
+| `npm run build:all` | 完整构建（前端 + Electron + Python） |
 
-### POST /export_segment
-导出指定时间范围的音频片段
+## 📦 发布版本
 
-### POST /convert
-音频格式转换
+### v1.0.0 (2025-03-24)
+- ✨ 首次发布，完全离线的 Electron 桌面应用
+- 🎙️ 智能说话人分割，支持 5-10 分钟音频
+- 📊 可视化波形编辑，支持片段拖拽调整
+- 💾 片段导出功能，保持原格式
+- 📈 响应时延分析，支持 Excel 导出
+- 🖥️ 支持 macOS、Windows、Linux 三平台
 
 ## 🤝 贡献指南
 
@@ -160,8 +205,14 @@ audio-spliter/
 4. 推送到分支 (`git push origin feature/amazing-feature`)
 5. 打开 Pull Request
 
+## 📄 许可证
+
+[MIT](LICENSE)
+
 ## 🙏 致谢
 
 - [wavesurfer.js](https://wavesurfer-js.org/) - 音频波形可视化
 - [librosa](https://librosa.org/) - 音频特征提取
 - [scikit-learn](https://scikit-learn.org/) - 机器学习聚类
+- [Electron](https://www.electronjs.org/) - 桌面应用框架
+- [PyInstaller](https://pyinstaller.org/) - Python 打包工具
