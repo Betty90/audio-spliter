@@ -1,6 +1,7 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { Upload, FileAudio, Play, Pause, Square, ZoomIn, ZoomOut, Scissors, Download, ArrowLeft, Repeat } from 'lucide-react';
+import { Upload, FileAudio, Play, Pause, Square, ZoomIn, ZoomOut, Scissors, Download, ArrowLeft, Repeat, X } from 'lucide-react';
 import { ACCEPTED_MIME_TYPES } from '../constants';
+import { exportSegmentWithOptions } from '../services/apiService';
 
 interface SplitterPageProps {
   onBack: () => void;
@@ -36,6 +37,9 @@ const SplitterPage: React.FC<SplitterPageProps> = ({ onBack }) => {
   const [selectedRegionId, setSelectedRegionId] = useState<string | null>(null);
   const [isLooping, setIsLooping] = useState(false);
   const [dragState, setDragState] = useState<DragState>({ type: 'none' });
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+  const [exportChannelOption, setExportChannelOption] = useState<'both' | 'left' | 'right'>('both');
+  const [isExporting, setIsExporting] = useState(false);
   
   const audioRef = useRef<HTMLAudioElement>(null);
   const waveformContainerRef = useRef<HTMLDivElement>(null);
@@ -118,13 +122,55 @@ const SplitterPage: React.FC<SplitterPageProps> = ({ onBack }) => {
     setSelectedRegionId(null);
   };
 
+  const openExportModal = () => {
+    if (!selectedRegionId) return;
+    setIsExportModalOpen(true);
+  };
+
+  const closeExportModal = () => {
+    setIsExportModalOpen(false);
+    setExportChannelOption('both');
+  };
+
   const exportRegion = async () => {
     if (!selectedRegionId || !audioFile || !audioBuffer) return;
     
     const region = regions.find(r => r.id === selectedRegionId);
     if (!region) return;
     
-    console.log('Exporting region:', region);
+    setIsExporting(true);
+    
+    try {
+      const extension = audioFile.name.split('.').pop() || 'wav';
+      const outputFilename = `segment_${regions.indexOf(region) + 1}_${formatTime(region.start).replace(/:/g, '-')}.${extension}`;
+      
+      const blob = await exportSegmentWithOptions(
+        audioFile,
+        region.start,
+        region.end,
+        outputFilename,
+        {
+          channels: exportChannelOption,
+          preserveFormat: true
+        }
+      );
+      
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = outputFilename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      closeExportModal();
+    } catch (error) {
+      console.error('Export failed:', error);
+      alert('导出失败: ' + (error instanceof Error ? error.message : '未知错误'));
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   const playRegion = (regionId: string) => {
@@ -468,7 +514,7 @@ const SplitterPage: React.FC<SplitterPageProps> = ({ onBack }) => {
                       删除
                     </button>
                     <button
-                      onClick={exportRegion}
+                      onClick={openExportModal}
                       className="flex items-center gap-1 px-3 py-2 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-lg text-sm font-medium transition-colors"
                     >
                       <Download size={14} />
@@ -573,6 +619,93 @@ const SplitterPage: React.FC<SplitterPageProps> = ({ onBack }) => {
           onEnded={() => setIsPlaying(false)}
           onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
         />
+      )}
+
+      {isExportModalOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-xl w-96 p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-slate-800">导出片段</h3>
+              <button
+                onClick={closeExportModal}
+                className="p-1 hover:bg-slate-100 rounded-full transition-colors"
+              >
+                <X size={20} className="text-slate-500" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  声道选择
+                </label>
+                <div className="space-y-2">
+                  <label className="flex items-center gap-2 p-3 border border-slate-200 rounded-lg cursor-pointer hover:bg-slate-50 transition-colors">
+                    <input
+                      type="radio"
+                      name="channel"
+                      value="both"
+                      checked={exportChannelOption === 'both'}
+                      onChange={(e) => setExportChannelOption(e.target.value as 'both' | 'left' | 'right')}
+                      className="w-4 h-4 text-blue-600"
+                    />
+                    <span className="text-sm text-slate-700">双声道 (立体声)</span>
+                  </label>
+                  <label className="flex items-center gap-2 p-3 border border-slate-200 rounded-lg cursor-pointer hover:bg-slate-50 transition-colors">
+                    <input
+                      type="radio"
+                      name="channel"
+                      value="left"
+                      checked={exportChannelOption === 'left'}
+                      onChange={(e) => setExportChannelOption(e.target.value as 'both' | 'left' | 'right')}
+                      className="w-4 h-4 text-blue-600"
+                    />
+                    <span className="text-sm text-slate-700">仅左声道 (L)</span>
+                  </label>
+                  <label className="flex items-center gap-2 p-3 border border-slate-200 rounded-lg cursor-pointer hover:bg-slate-50 transition-colors">
+                    <input
+                      type="radio"
+                      name="channel"
+                      value="right"
+                      checked={exportChannelOption === 'right'}
+                      onChange={(e) => setExportChannelOption(e.target.value as 'both' | 'left' | 'right')}
+                      className="w-4 h-4 text-blue-600"
+                    />
+                    <span className="text-sm text-slate-700">仅右声道 (R)</span>
+                  </label>
+                </div>
+              </div>
+
+              <div className="pt-4 border-t border-slate-200">
+                <div className="flex gap-3">
+                  <button
+                    onClick={closeExportModal}
+                    className="flex-1 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-medium transition-colors"
+                  >
+                    取消
+                  </button>
+                  <button
+                    onClick={exportRegion}
+                    disabled={isExporting}
+                    className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+                  >
+                    {isExporting ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        导出中...
+                      </>
+                    ) : (
+                      <>
+                        <Download size={16} />
+                        导出
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
