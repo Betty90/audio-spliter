@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Upload, FileAudio, Settings as SettingsIcon, Loader2, Music4, AlertCircle, Link as LinkIcon, RefreshCw, Layers, Repeat, Trash2, Activity } from 'lucide-react';
+import { Upload, FileAudio, Settings as SettingsIcon, Loader2, Music4, AlertCircle, Link as LinkIcon, RefreshCw, Layers, Repeat, Trash2, Activity, Scissors } from 'lucide-react';
 import { AudioFile, FileStatus, AudioSegment, AppSettings } from './types';
 import { analyzeAudio, checkHealth as checkBackendHealth } from './services/apiService';
 import { DEFAULT_SETTINGS, ACCEPTED_MIME_TYPES } from './constants';
@@ -8,10 +8,11 @@ import LabModal from './components/LabModal';
 import WaveformSidebar from './components/WaveformSidebar';
 import AnalysisTable from './components/AnalysisTable';
 import ConverterPage from './components/ConverterPage';
+import SplitterPage from './components/SplitterPage';
 import ConfirmDialog, { ConfirmConfig } from './components/ConfirmDialog';
 
 const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'analyzer' | 'converter'>('analyzer');
+  const [activeTab, setActiveTab] = useState<'analyzer' | 'converter' | 'splitter'>('analyzer');
   const [files, setFiles] = useState<AudioFile[]>([]);
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -189,6 +190,13 @@ const App: React.FC = () => {
                 分析
             </button>
             <button
+                onClick={() => setActiveTab('splitter')}
+                className={`flex items-center gap-2 px-4 py-1.5 rounded-md text-sm font-medium transition-all ${activeTab === 'splitter' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+            >
+                <Scissors size={16} />
+                分割
+            </button>
+            <button
                 onClick={() => setActiveTab('converter')}
                 className={`flex items-center gap-2 px-4 py-1.5 rounded-md text-sm font-medium transition-all ${activeTab === 'converter' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
             >
@@ -237,6 +245,10 @@ const App: React.FC = () => {
             <ConverterPage 
                 onBack={() => setActiveTab('analyzer')} 
                 existingFiles={files}
+            />
+        ) : activeTab === 'splitter' ? (
+            <SplitterPage 
+                onBack={() => setActiveTab('analyzer')}
             />
         ) : (
             <>
