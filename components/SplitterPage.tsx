@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { Upload, FileAudio, Play, Pause, Square, ZoomIn, ZoomOut, Scissors, Download, ArrowLeft, Repeat, X } from 'lucide-react';
+import { Upload, FileAudio, Play, Pause, Square, ZoomIn, ZoomOut, Scissors, Download, ArrowLeft, Repeat, X, AlertCircle } from 'lucide-react';
 import { ACCEPTED_MIME_TYPES } from '../constants';
 import { exportSegmentWithOptions } from '../services/apiService';
 
@@ -48,25 +48,54 @@ const SplitterPage: React.FC<SplitterPageProps> = ({ onBack }) => {
   
   const [audioBuffer, setAudioBuffer] = useState<AudioBuffer | null>(null);
   const [channelData, setChannelData] = useState<Float32Array[]>([]);
+  const [error, setError] = useState<string | null>(null);
 
-  // Handle file upload
   const handleFileUpload = async (fileList: FileList | null) => {
     if (!fileList || fileList.length === 0) return;
     
     const file = fileList[0];
+    
+    const maxSize = 500 * 1024 * 1024;
+    if (file.size > maxSize) {
+      setError('文件大小超过500MB限制');
+      return;
+    }
+    
+    const validTypes = Object.values(ACCEPTED_MIME_TYPES).flat();
+    const fileExtension = file.name.split('.').pop()?.toLowerCase();
+    const isValidType = validTypes.some(type => {
+      if (type.includes('*')) {
+        return file.type.match(type) || fileExtension === type.replace('/*', '').replace('audio/', '');
+      }
+      return file.type === type;
+    });
+    
+    if (!isValidType) {
+      setError('不支持的文件格式。请上传 MP3, WAV, M4A, MP4, AAC, OGG 或 FLAC 格式');
+      return;
+    }
+    
+    setError(null);
     setAudioFile(file);
+    setRegions([]);
+    setSelectedRegionId(null);
+    setCurrentTime(0);
+    setIsPlaying(false);
+    
+    if (audioUrl) {
+      URL.revokeObjectURL(audioUrl);
+    }
+    
     const url = URL.createObjectURL(file);
     setAudioUrl(url);
     setIsLoading(true);
     
-    // Load audio data for waveform
     try {
       const arrayBuffer = await file.arrayBuffer();
       const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
       const buffer = await audioContext.decodeAudioData(arrayBuffer);
       setAudioBuffer(buffer);
       
-      // Extract channel data
       const channels: Float32Array[] = [];
       for (let i = 0; i < buffer.numberOfChannels; i++) {
         channels.push(buffer.getChannelData(i));
@@ -75,6 +104,9 @@ const SplitterPage: React.FC<SplitterPageProps> = ({ onBack }) => {
       setDuration(buffer.duration);
     } catch (err) {
       console.error('Failed to load audio:', err);
+      setError('无法加载音频文件。文件可能已损坏或格式不受支持。');
+      setAudioFile(null);
+      setAudioUrl(null);
     } finally {
       setIsLoading(false);
     }
@@ -106,10 +138,21 @@ const SplitterPage: React.FC<SplitterPageProps> = ({ onBack }) => {
 
   // Add new region
   const addRegion = () => {
+    const regionDuration = 5;
+    const maxDuration = 300;
+    
+    let start = currentTime;
+    let end = Math.min(currentTime + regionDuration, duration);
+    
+    if (duration > maxDuration) {
+      start = 0;
+      end = Math.min(regionDuration, duration);
+    }
+    
     const newRegion: AudioRegion = {
       id: `region-${Date.now()}`,
-      start: currentTime,
-      end: Math.min(currentTime + 5, duration),
+      start,
+      end,
       color: `hsl(${Math.random() * 360}, 70%, 60%)`
     };
     setRegions(prev => [...prev, newRegion]);
@@ -436,7 +479,21 @@ const SplitterPage: React.FC<SplitterPageProps> = ({ onBack }) => {
         </div>
       </div>
 
-      {/* Main content */}
+      {error && (
+        <div className="bg-red-50 border-b border-red-200 px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-2 text-red-700">
+            <AlertCircle size={18} />
+            <span className="text-sm">{error}</span>
+          </div>
+          <button
+            onClick={() => setError(null)}
+            className="text-red-500 hover:text-red-700"
+          >
+            <X size={16} />
+          </button>
+        </div>
+      )}
+
       <div className="flex-1 flex flex-col overflow-hidden">
         {!audioFile ? (
           // Empty state
