@@ -136,7 +136,55 @@ const SplitterPage: React.FC<SplitterPageProps> = ({ onBack }) => {
   const zoomIn = () => setZoom(prev => Math.min(prev * 1.5, MAX_ZOOM));
   const zoomOut = () => setZoom(prev => Math.max(prev / 1.5, MIN_ZOOM));
 
-  // Add new region
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        return;
+      }
+
+      switch (e.key) {
+        case ' ':
+          e.preventDefault();
+          togglePlayback();
+          break;
+        case 'Delete':
+        case 'Backspace':
+          if (selectedRegionId && !isExportModalOpen) {
+            deleteSelectedRegion();
+          }
+          break;
+        case 'n':
+          if (e.ctrlKey || e.metaKey) {
+            e.preventDefault();
+            addRegion();
+          }
+          break;
+        case 'e':
+          if ((e.ctrlKey || e.metaKey) && selectedRegionId) {
+            e.preventDefault();
+            openExportModal();
+          }
+          break;
+        case '+':
+        case '=':
+          if (e.ctrlKey || e.metaKey) {
+            e.preventDefault();
+            zoomIn();
+          }
+          break;
+        case '-':
+          if (e.ctrlKey || e.metaKey) {
+            e.preventDefault();
+            zoomOut();
+          }
+          break;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isPlaying, selectedRegionId, isExportModalOpen]);
+
   const addRegion = () => {
     const regionDuration = 5;
     const maxDuration = 300;
@@ -494,9 +542,15 @@ const SplitterPage: React.FC<SplitterPageProps> = ({ onBack }) => {
         </div>
       )}
 
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div
+        className="flex-1 flex flex-col overflow-hidden"
+        onDragOver={(e) => { e.preventDefault(); }}
+        onDrop={(e) => {
+          e.preventDefault();
+          handleFileUpload(e.dataTransfer.files);
+        }}
+      >
         {!audioFile ? (
-          // Empty state
           <div className="flex-1 flex flex-col items-center justify-center p-8">
             <div className="w-32 h-32 bg-slate-100 rounded-full flex items-center justify-center mb-6">
               <Scissors size={48} className="text-slate-400" />
@@ -504,7 +558,7 @@ const SplitterPage: React.FC<SplitterPageProps> = ({ onBack }) => {
             <h3 className="text-xl font-semibold text-slate-700 mb-2">上传音频文件开始分割</h3>
             <p className="text-slate-500 text-center max-w-md mb-6">
               支持 MP3、WAV、M4A 等格式<br />
-              上传后可进行可视化波形编辑和片段导出
+              拖拽文件到此处或点击下方按钮上传
             </p>
             <button
               onClick={() => document.getElementById('splitter-file-upload')?.click()}
