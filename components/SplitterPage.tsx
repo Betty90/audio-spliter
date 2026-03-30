@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { Upload, FileAudio, Play, Pause, Square, ZoomIn, ZoomOut, Scissors, Download, ArrowLeft } from 'lucide-react';
+import { Upload, FileAudio, Play, Pause, Square, ZoomIn, ZoomOut, Scissors, Download, ArrowLeft, Repeat } from 'lucide-react';
 import { ACCEPTED_MIME_TYPES } from '../constants';
 
 interface SplitterPageProps {
@@ -13,34 +13,35 @@ interface AudioRegion {
   color: string;
 }
 
+type DragState = 
+  | { type: 'none' }
+  | { type: 'move'; regionId: string; offsetX: number }
+  | { type: 'resize-left'; regionId: string }
+  | { type: 'resize-right'; regionId: string };
+
 const SplitterPage: React.FC<SplitterPageProps> = ({ onBack }) => {
-  // File state
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   
-  // Playback state
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   
-  // Zoom state (pixels per second)
   const [zoom, setZoom] = useState(100);
   const MIN_ZOOM = 10;
   const MAX_ZOOM = 1000;
   
-  // Regions
   const [regions, setRegions] = useState<AudioRegion[]>([]);
   const [selectedRegionId, setSelectedRegionId] = useState<string | null>(null);
   const [isLooping, setIsLooping] = useState(false);
+  const [dragState, setDragState] = useState<DragState>({ type: 'none' });
   
-  // Refs
   const audioRef = useRef<HTMLAudioElement>(null);
   const waveformContainerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animationRef = useRef<number | null>(null);
   
-  // Audio data for waveform
   const [audioBuffer, setAudioBuffer] = useState<AudioBuffer | null>(null);
   const [channelData, setChannelData] = useState<Float32Array[]>([]);
 
@@ -111,25 +112,109 @@ const SplitterPage: React.FC<SplitterPageProps> = ({ onBack }) => {
     setSelectedRegionId(newRegion.id);
   };
 
-  // Delete selected region
   const deleteSelectedRegion = () => {
     if (!selectedRegionId) return;
     setRegions(prev => prev.filter(r => r.id !== selectedRegionId));
     setSelectedRegionId(null);
   };
 
-  // Export selected region
   const exportRegion = async () => {
     if (!selectedRegionId || !audioFile || !audioBuffer) return;
     
     const region = regions.find(r => r.id === selectedRegionId);
     if (!region) return;
     
-    // TODO: Implement export logic
     console.log('Exporting region:', region);
   };
 
-  // Update time display
+  const playRegion = (regionId: string) => {
+    const region = regions.find(r => r.id === regionId);
+    if (!region || !audioRef.current) return;
+    
+    audioRef.current.currentTime = region.start;
+    audioRef.current.play();
+    setIsPlaying(true);
+    setIsLooping(true);
+    setSelectedRegionId(regionId);
+  };
+
+  const handleCanvasMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!canvasRef.current || regions.length === 0) return;
+    
+    const rect = canvasRef.current.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const time = x / zoom;
+    
+    const HANDLE_WIDTH = 6;
+    
+    for (const region of regions) {
+      const x1 = region.start * zoom;
+      const x2 = region.end * zoom;
+      
+      if (Math.abs(x - x1) <= HANDLE_WIDTH) {
+        setDragState({ type: 'resize-left', regionId: region.id });
+        setSelectedRegionId(region.id);
+        return;
+      }
+      
+      if (Math.abs(x - x2) <= HANDLE_WIDTH) {
+        setDragState({ type: 'resize-right', regionId: region.id });
+        setSelectedRegionId(region.id);
+        return;
+      }
+      
+      if (x >= x1 && x <= x2) {
+        setDragState({ type: 'move', regionId: region.id, offsetX: x - x1 });
+        setSelectedRegionId(region.id);
+        return;
+      }
+    }
+    
+    setSelectedRegionId(null);
+  };
+
+  const handleCanvasMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (dragState.type === 'none' || !canvasRef.current) return;
+    
+    const rect = canvasRef.current.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const time = Math.max(0, Math.min(x / zoom, duration));
+    
+    setRegions(prev => prev.map(region => {
+      if (region.id !== dragState.regionId) return region;
+      
+      if (dragState.type === 'resize-left') {
+        return { ...region, start: Math.min(time, region.end - 0.1) };
+      } else if (dragState.type === 'resize-right') {
+        return { ...region, end: Math.max(time, region.start + 0.1) };
+      } else if (dragState.type === 'move') {
+        const regionWidth = region.end - region.start;
+        const newStart = Math.max(0, Math.min(time - dragState.offsetX / zoom, duration - regionWidth));
+        return { ...region, start: newStart, end: newStart + regionWidth };
+      }
+      
+      return region;
+    }));
+  };
+
+  const handleCanvasMouseUp = () => {
+    setDragState({ type: 'none' });
+  };
+
+  const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (dragState.type !== 'none') return;
+    
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    
+    const x = e.clientX - rect.left;
+    const time = x / zoom;
+    
+    if (audioRef.current) {
+      audioRef.current.currentTime = Math.max(0, Math.min(time, duration));
+      setCurrentTime(audioRef.current.currentTime);
+    }
+  };
   useEffect(() => {
     const updateTime = () => {
       if (audioRef.current) {
@@ -344,17 +429,22 @@ const SplitterPage: React.FC<SplitterPageProps> = ({ onBack }) => {
                 >
                   <Square size={18} />
                 </button>
-                
+                <button
+                  onClick={() => setIsLooping(!isLooping)}
+                  className={`p-2 rounded-lg transition-colors ${isLooping ? 'bg-blue-100 text-blue-600' : 'bg-slate-200 hover:bg-slate-300 text-slate-700'}`}
+                  title={isLooping ? '循环播放开启' : '循环播放关闭'}
+                >
+                  <Repeat size={18} />
+                </button>
+
                 <div className="w-px h-8 bg-slate-200 mx-2" />
-                
-                {/* Time display */}
+
                 <div className="text-sm font-mono text-slate-600">
                   {formatTime(currentTime)} / {formatTime(duration)}
                 </div>
               </div>
-              
+
               <div className="flex items-center gap-2">
-                {/* Region controls */}
                 <button
                   onClick={addRegion}
                   className="flex items-center gap-1 px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium transition-colors"
@@ -364,6 +454,13 @@ const SplitterPage: React.FC<SplitterPageProps> = ({ onBack }) => {
                 </button>
                 {selectedRegionId && (
                   <>
+                    <button
+                      onClick={() => playRegion(selectedRegionId)}
+                      className="p-2 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-lg transition-colors"
+                      title="播放片段"
+                    >
+                      <Play size={16} />
+                    </button>
                     <button
                       onClick={deleteSelectedRegion}
                       className="px-3 py-2 bg-red-100 hover:bg-red-200 text-red-700 rounded-lg text-sm font-medium transition-colors"
@@ -417,8 +514,13 @@ const SplitterPage: React.FC<SplitterPageProps> = ({ onBack }) => {
                 >
                   <canvas
                     ref={canvasRef}
-                    className="block"
+                    className="block cursor-crosshair"
                     style={{ width: duration * zoom, height: 300 }}
+                    onMouseDown={handleCanvasMouseDown}
+                    onMouseMove={handleCanvasMouseMove}
+                    onMouseUp={handleCanvasMouseUp}
+                    onMouseLeave={handleCanvasMouseUp}
+                    onClick={handleCanvasClick}
                   />
                 </div>
               )}
