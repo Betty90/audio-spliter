@@ -543,8 +543,8 @@ def upload_file():
 @app.route("/export_segment", methods=["POST", "OPTIONS"])
 def export_segment():
     """
-    导出音频片段，保持原文件格式
-    前端传递: file (上传的原始音频文件), start, end, output_filename
+    导出音频片段，支持声道选择和格式保持
+    前端传递: file (上传的原始音频文件), start, end, output_filename, channels (both/left/right)
     """
     if request.method == "OPTIONS":
         return jsonify({"status": "ok"}), 200
@@ -564,6 +564,11 @@ def export_segment():
             return jsonify({"error": "开始时间必须小于结束时间"}), 400
     except ValueError:
         return jsonify({"error": "时间参数无效"}), 400
+
+    # 获取声道选项
+    channels = request.form.get("channels", "both")
+    if channels not in ["both", "left", "right"]:
+        channels = "both"
 
     temp_input = None
     temp_output = None
@@ -589,6 +594,9 @@ def export_segment():
         lossy_formats = [".mp3", ".m4a", ".aac", ".ogg", ".wma"]
         is_lossy = output_ext.lower() in lossy_formats
 
+        # 获取原始音频参数
+        original_info = get_audio_info(temp_input.name)
+
         cmd = [
             ffmpeg_path,
             "-i",
@@ -597,17 +605,45 @@ def export_segment():
             str(start),
             "-t",
             str(duration),
-            "-y",
         ]
 
+        # 声道处理
+        if channels == "left":
+            cmd.extend(["-af", "pan=mono|c0=FL"])  # 仅左声道
+        elif channels == "right":
+            cmd.extend(["-af", "pan=mono|c0=FR"])  # 仅右声道
+
+        # 编码设置 - 保持原格式参数
         if is_lossy:
-            # 有损格式：使用高质量重新编码
+            # 有损格式：使用高质量重新编码，保持原始采样率和码率
             cmd.extend(["-c:a", "libmp3lame", "-q:a", "2"])
+            # 保持原始采样率
+            if original_info and original_info.get("sample_rate"):
+                cmd.extend(["-ar", str(original_info["sample_rate"])])
         else:
             # 无损格式：直接复制流
             cmd.extend(["-c", "copy"])
+            # 如果需要声道处理，则不能直接用 copy
+            if channels != "both":
+                cmd = [
+                    ffmpeg_path,
+                    "-i",
+                    temp_input.name,
+                    "-ss",
+                    str(start),
+                    "-t",
+                    str(duration),
+                ]
+                if channels == "left":
+                    cmd.extend(["-af", "pan=mono|c0=FL"])
+                elif channels == "right":
+                    cmd.extend(["-af", "pan=mono|c0=FR"])
+                # 使用 PCM 格式保持无损
+                cmd.extend(["-c:a", "pcm_s16le"])
+                if original_info and original_info.get("sample_rate"):
+                    cmd.extend(["-ar", str(original_info["sample_rate"])])
 
-        cmd.append(temp_output.name)
+        cmd.extend(["-y", temp_output.name])
 
         # 执行 FFmpeg
         logging.info(f"Exporting segment: {' '.join(cmd)}")
@@ -641,7 +677,6 @@ def export_segment():
 
 
 def get_mime_type(ext):
-    """根据扩展名获取 MIME 类型"""
     mime_types = {
         ".mp3": "audio/mpeg",
         ".wav": "audio/wav",
@@ -654,6 +689,34 @@ def get_mime_type(ext):
         ".wma": "audio/x-ms-wma",
     }
     return mime_types.get(ext.lower(), "audio/wav")
+
+
+def get_audio_info(file_path):
+    try:
+        cmd = [FFMPEG_BINARY, "-i", file_path]
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        output = result.stderr
+
+        info = {}
+
+        import re
+
+        sample_rate_match = re.search(r"(\d+) Hz", output)
+        if sample_rate_match:
+            info["sample_rate"] = int(sample_rate_match.group(1))
+
+        channels_match = re.search(r"(\d+) channels?", output)
+        if channels_match:
+            info["channels"] = int(channels_match.group(1))
+
+        bitrate_match = re.search(r"(\d+) kb/s", output)
+        if bitrate_match:
+            info["bitrate"] = int(bitrate_match.group(1))
+
+        return info
+    except Exception as e:
+        logging.error(f"Failed to get audio info: {e}")
+        return None
 
 
 @app.route("/debug", methods=["GET"])
