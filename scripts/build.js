@@ -5,7 +5,7 @@
  */
 
 import { spawn, execSync } from 'child_process';
-import { existsSync, mkdirSync, rmSync, copyFileSync } from 'fs';
+import { existsSync, mkdirSync, rmSync, copyFileSync, readdirSync } from 'fs';
 import { join, resolve } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -216,7 +216,7 @@ function copyResources() {
         mkdirSync(dest, { recursive: true });
       }
       
-      const entries = require('fs').readdirSync(src, { withFileTypes: true });
+      const entries = readdirSync(src, { withFileTypes: true });
       
       for (const entry of entries) {
         const srcPath = join(src, entry.name);
