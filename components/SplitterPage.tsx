@@ -61,15 +61,21 @@ const SplitterPage: React.FC<SplitterPageProps> = ({ onBack }) => {
       return;
     }
     
-    const validTypes = Object.values(ACCEPTED_MIME_TYPES).flat();
+    // 验证文件类型 - 支持扩展名和 MIME type 两种方式
     const fileExtension = file.name.split('.').pop()?.toLowerCase();
-    const isValidType = validTypes.some(type => {
-      if (type.includes('*')) {
-        return file.type.match(type) || fileExtension === type.replace('/*', '').replace('audio/', '');
-      }
-      return file.type === type;
-    });
-    
+    const validExtensions = ['.mp3', '.wav', '.m4a', '.aac', '.ogg', '.mp4', '.mov', '.webm', '.flac'];
+    const validMimeTypes = [
+      'audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/x-wav', 'audio/wave',
+      'audio/mp4', 'audio/x-m4a', 'audio/aac', 'audio/ogg', 'audio/flac',
+      'video/mp4', 'video/quicktime', 'video/webm'
+    ];
+
+    const isValidExtension = fileExtension && validExtensions.includes(`.${fileExtension}`);
+    const isValidMimeType = file.type && validMimeTypes.some(mime => file.type.includes(mime.split('/')[1]));
+
+    // 如果 MIME type 为空或不明确，信任文件扩展名
+    const isValidType = isValidExtension || isValidMimeType;
+
     if (!isValidType) {
       setError('不支持的文件格式。请上传 MP3, WAV, M4A, MP4, AAC, OGG 或 FLAC 格式');
       return;
@@ -552,21 +558,16 @@ const SplitterPage: React.FC<SplitterPageProps> = ({ onBack }) => {
       >
         {!audioFile ? (
           <div className="flex-1 flex flex-col items-center justify-center p-8">
-            <div className="w-32 h-32 bg-slate-100 rounded-full flex items-center justify-center mb-6">
-              <Scissors size={48} className="text-slate-400" />
-            </div>
-            <h3 className="text-xl font-semibold text-slate-700 mb-2">上传音频文件开始分割</h3>
-            <p className="text-slate-500 text-center max-w-md mb-6">
-              支持 MP3、WAV、M4A 等格式<br />
-              拖拽文件到此处或点击下方按钮上传
-            </p>
-            <button
+            <label 
+              className="flex flex-col items-center justify-center w-full max-w-lg h-64 
+                border-2 border-dashed border-blue-300 bg-blue-50/50 rounded-2xl
+                cursor-pointer hover:bg-blue-50 transition-colors"
               onClick={() => document.getElementById('splitter-file-upload')?.click()}
-              className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium transition-colors"
             >
-              <Upload size={18} />
-              选择音频文件
-            </button>
+              <Upload size={48} className="text-blue-500 mb-4" />
+              <span className="font-medium text-blue-600 text-lg">点击或拖拽上传音频</span>
+              <span className="text-sm text-blue-400 mt-2">支持 MP3、WAV、M4A 等格式</span>
+            </label>
           </div>
         ) : (
           <>
@@ -582,13 +583,13 @@ const SplitterPage: React.FC<SplitterPageProps> = ({ onBack }) => {
                 </button>
                 <button
                   onClick={stopPlayback}
-                  className="p-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg transition-colors"
+                  className="p-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-lg transition-colors"
                 >
                   <Square size={18} />
                 </button>
                 <button
                   onClick={() => setIsLooping(!isLooping)}
-                  className={`p-2 rounded-lg transition-colors ${isLooping ? 'bg-blue-100 text-blue-600' : 'bg-slate-200 hover:bg-slate-300 text-slate-700'}`}
+                  className={`p-2 rounded-lg transition-colors border ${isLooping ? 'bg-blue-600 text-white border-blue-600' : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700'}`}
                   title={isLooping ? '循环播放开启' : '循环播放关闭'}
                 >
                   <Repeat size={18} />
@@ -604,7 +605,7 @@ const SplitterPage: React.FC<SplitterPageProps> = ({ onBack }) => {
               <div className="flex items-center gap-2">
                 <button
                   onClick={addRegion}
-                  className="flex items-center gap-1 px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium transition-colors"
+                  className="flex items-center gap-1 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
                 >
                   <Scissors size={14} />
                   添加片段
@@ -613,20 +614,20 @@ const SplitterPage: React.FC<SplitterPageProps> = ({ onBack }) => {
                   <>
                     <button
                       onClick={() => playRegion(selectedRegionId)}
-                      className="p-2 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-lg transition-colors"
+                      className="p-2 bg-white border border-slate-200 hover:border-blue-300 hover:text-blue-600 text-slate-700 rounded-lg transition-colors"
                       title="播放片段"
                     >
                       <Play size={16} />
                     </button>
                     <button
                       onClick={deleteSelectedRegion}
-                      className="px-3 py-2 bg-red-100 hover:bg-red-200 text-red-700 rounded-lg text-sm font-medium transition-colors"
+                      className="px-3 py-2 bg-white border border-slate-200 hover:border-red-300 hover:text-red-600 text-slate-700 rounded-lg text-sm font-medium transition-colors"
                     >
                       删除
                     </button>
                     <button
                       onClick={openExportModal}
-                      className="flex items-center gap-1 px-3 py-2 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-lg text-sm font-medium transition-colors"
+                      className="flex items-center gap-1 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
                     >
                       <Download size={14} />
                       导出
