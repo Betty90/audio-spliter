@@ -69,3 +69,6 @@ release/
 py-dist/
 backend/dist/
 backend/build/
+
+# Build resources (auto-copied from backend/dist)
+resources/
