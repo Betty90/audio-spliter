@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { Upload, FileAudio, Play, Pause, Square, ZoomIn, ZoomOut, Scissors, Download, ArrowLeft, Repeat, X, AlertCircle } from 'lucide-react';
+import { Upload, FileAudio, Play, Pause, Square, ZoomIn, ZoomOut, Scissors, Download, Repeat, X, AlertCircle } from 'lucide-react';
 import { ACCEPTED_MIME_TYPES } from '../constants';
 import { exportSegmentWithOptions } from '../services/apiService';
 
@@ -482,18 +482,12 @@ const SplitterPage: React.FC<SplitterPageProps> = ({ onBack }) => {
   };
 
   return (
-    <div className="flex flex-col h-full bg-slate-50">
+    <div className="flex flex-col h-full p-6 max-w-5xl mx-auto w-full overflow-y-auto">
       {/* Header */}
-      <div className="h-14 bg-white border-b border-slate-200 flex items-center justify-between px-6">
-        <div className="flex items-center gap-4">
-          <button
-            onClick={onBack}
-            className="flex items-center gap-2 text-slate-600 hover:text-slate-800 transition-colors"
-          >
-            <ArrowLeft size={18} />
-            <span>返回</span>
-          </button>
-          <h2 className="text-lg font-semibold text-slate-800">音频分割</h2>
+      <div className="mb-6 flex justify-between items-center">
+        <div>
+          <h2 className="text-2xl font-bold text-slate-800 mb-1">音频分割</h2>
+          <p className="text-slate-500 text-sm">支持 MP3、WAV、M4A 等格式，可视化波形编辑</p>
         </div>
         
         <div className="flex items-center gap-2">
@@ -557,9 +551,9 @@ const SplitterPage: React.FC<SplitterPageProps> = ({ onBack }) => {
         }}
       >
         {!audioFile ? (
-          <div className="flex-1 flex flex-col items-center justify-center p-8">
-            <label 
-              className="flex flex-col items-center justify-center w-full max-w-lg h-64 
+          <div className="flex-1 flex flex-col items-center justify-center p-8 w-full">
+            <label
+              className="flex flex-col items-center justify-center w-full h-64
                 border-2 border-dashed border-blue-300 bg-blue-50/50 rounded-2xl
                 cursor-pointer hover:bg-blue-50 transition-colors"
               onClick={() => document.getElementById('splitter-file-upload')?.click()}
