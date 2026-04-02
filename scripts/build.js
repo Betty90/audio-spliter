@@ -5,7 +5,7 @@
  */
 
 import { spawn, execSync } from 'child_process';
-import { existsSync, mkdirSync, rmSync, copyFileSync } from 'fs';
+import { existsSync, mkdirSync, rmSync, copyFileSync, readdirSync } from 'fs';
 import { join, resolve } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -198,6 +198,43 @@ function copyResources() {
   } else {
     log('Creating resources directory...', 'yellow');
     mkdirSync(resourcesDir, { recursive: true });
+  }
+
+  const pythonBuildDir = join(rootDir, 'backend', 'dist', 'server');
+  const serverResourcesDir = join(resourcesDir, 'server');
+  
+  if (existsSync(pythonBuildDir)) {
+    log('Copying Python backend build output...', 'blue');
+    
+    if (existsSync(serverResourcesDir)) {
+      log('Removing existing resources/server...', 'yellow');
+      rmSync(serverResourcesDir, { recursive: true, force: true });
+    }
+    
+    const copyRecursive = (src, dest) => {
+      if (!existsSync(dest)) {
+        mkdirSync(dest, { recursive: true });
+      }
+      
+      const entries = readdirSync(src, { withFileTypes: true });
+      
+      for (const entry of entries) {
+        const srcPath = join(src, entry.name);
+        const destPath = join(dest, entry.name);
+        
+        if (entry.isDirectory()) {
+          copyRecursive(srcPath, destPath);
+        } else {
+          copyFileSync(srcPath, destPath);
+        }
+      }
+    };
+    
+    copyRecursive(pythonBuildDir, serverResourcesDir);
+    log(`Copied Python backend to resources/server`, 'green');
+  } else {
+    log('Python build output not found at backend/dist/server', 'yellow');
+    log('Skipping Python backend copy...', 'yellow');
   }
 
   log('Resources ready!', 'green');

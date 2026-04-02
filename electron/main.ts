@@ -1,12 +1,8 @@
 import { app, BrowserWindow, ipcMain, shell } from 'electron';
 import path from 'path';
-import { fileURLToPath } from 'url';
 import { getPythonPort, stopPythonProcess, waitForPython, setShuttingDown } from './python-manager.js';
 import { logInfo, logError } from './logger.js';
 import { initUpdater, checkForUpdatesOnStartup } from './updater.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 let mainWindow: BrowserWindow | null = null;
 let loadingWindow: BrowserWindow | null = null;
@@ -67,7 +63,7 @@ function createWindow(): void {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      preload: path.join(__dirname, '../../electron/preload.js'),
+      preload: path.join(app.getAppPath(), 'electron/preload.js'),
     },
     titleBarStyle: 'default',
     show: false,
@@ -76,10 +72,8 @@ function createWindow(): void {
   if (isDev) {
     mainWindow.loadURL('http://localhost:3001');
   } else {
-    // In packaged app, files are in app.asar:
-    // - electron/dist/main.js (this file)
-    // - dist/index.html (frontend)
-    mainWindow.loadFile(path.join(__dirname, '../../dist/index.html'));
+    // In packaged app, use app.getAppPath() to get the correct path to app.asar
+    mainWindow.loadFile(path.join(app.getAppPath(), 'dist/index.html'));
   }
   // DevTools disabled for production
 
