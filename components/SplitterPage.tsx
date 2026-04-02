@@ -40,8 +40,8 @@ const SplitterPage: React.FC<SplitterPageProps> = ({ onBack }) => {
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [exportChannelOption, setExportChannelOption] = useState<'both' | 'left' | 'right'>('both');
   const [isExporting, setIsExporting] = useState(false);
-  const [waveformHeight, setWaveformHeight] = useState(200);
-  const [amplitudeScale, setAmplitudeScale] = useState(2.5);
+  const [waveformHeight, setWaveformHeight] = useState(400);
+  const [amplitudeScale, setAmplitudeScale] = useState(2.0);
   const [isSelecting, setIsSelecting] = useState(false);
   const [selectionStart, setSelectionStart] = useState<number | null>(null);
   const [selectionEnd, setSelectionEnd] = useState<number | null>(null);
@@ -458,7 +458,7 @@ const SplitterPage: React.FC<SplitterPageProps> = ({ onBack }) => {
     
     // Set canvas size
     const width = duration * zoom;
-    const height = waveformHeight;
+    const height = waveformHeight + 30; // 为时间轴留出空间
     canvas.width = width;
     canvas.height = height;
     
@@ -566,8 +566,30 @@ const SplitterPage: React.FC<SplitterPageProps> = ({ onBack }) => {
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.moveTo(playheadX, 0);
-    ctx.lineTo(playheadX, height);
+    ctx.lineTo(playheadX, waveformHeight);
     ctx.stroke();
+
+    // Draw time axis
+    ctx.fillStyle = '#64748b';
+    ctx.font = '10px sans-serif';
+    ctx.textAlign = 'center';
+
+    const timeInterval = Math.max(1, Math.floor(duration / 10)); // 显示大约10个时间点
+    for (let t = 0; t <= duration; t += timeInterval) {
+      const x = t * zoom;
+      // 在时间轴位置绘制刻度
+      ctx.strokeStyle = '#cbd5e1';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(x, waveformHeight);
+      ctx.lineTo(x, waveformHeight + 5);
+      ctx.stroke();
+      // 绘制时间文字
+      const minutes = Math.floor(t / 60);
+      const seconds = Math.floor(t % 60);
+      const timeStr = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+      ctx.fillText(timeStr, x, waveformHeight + 18);
+    }
     
   }, [channelData, duration, zoom, regions, currentTime, waveformHeight, amplitudeScale, isSelecting, selectionStart, selectionEnd]);
 
@@ -580,9 +602,9 @@ const SplitterPage: React.FC<SplitterPageProps> = ({ onBack }) => {
   };
 
   return (
-    <div className="flex flex-col h-full p-6 max-w-5xl mx-auto w-full overflow-y-auto">
+    <div className="flex flex-col h-full p-4 overflow-y-auto">
       {/* Header */}
-      <div className="mb-6 flex justify-between items-center">
+      <div className="mb-4 flex justify-between items-center">
         <div>
           <h2 className="text-2xl font-bold text-slate-800 mb-1">音频分割</h2>
           <p className="text-slate-500 text-sm">支持 MP3、WAV、M4A 等格式，可视化波形编辑</p>
@@ -751,7 +773,7 @@ const SplitterPage: React.FC<SplitterPageProps> = ({ onBack }) => {
                 </button>
                 <span className="text-xs text-slate-500 w-12 text-center">{waveformHeight}px</span>
                 <button
-                  onClick={() => setWaveformHeight(prev => Math.min(400, prev + 20))}
+                  onClick={() => setWaveformHeight(prev => Math.min(600, prev + 20))}
                   className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
                   title="增加高度"
                 >
