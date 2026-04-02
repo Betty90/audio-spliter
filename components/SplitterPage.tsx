@@ -40,6 +40,8 @@ const SplitterPage: React.FC<SplitterPageProps> = ({ onBack }) => {
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [exportChannelOption, setExportChannelOption] = useState<'both' | 'left' | 'right'>('both');
   const [isExporting, setIsExporting] = useState(false);
+  const [waveformHeight, setWaveformHeight] = useState(200);
+  const [amplitudeScale, setAmplitudeScale] = useState(1.5);
   
   const audioRef = useRef<HTMLAudioElement>(null);
   const waveformContainerRef = useRef<HTMLDivElement>(null);
@@ -388,13 +390,39 @@ const SplitterPage: React.FC<SplitterPageProps> = ({ onBack }) => {
   useEffect(() => {
     if (!canvasRef.current || channelData.length === 0) return;
     
+    // HSL to RGBA converter for transparent fills
+    const hslToRgba = (hsl: string, alpha: number): string => {
+      const match = hsl.match(/hsl\((\d+),\s*(\d+)%,\s*(\d+)%\)/);
+      if (!match) return hsl;
+      const h = parseInt(match[1]) / 360;
+      const s = parseInt(match[2]) / 100;
+      const l = parseInt(match[3]) / 100;
+      
+      const hue2rgb = (p: number, q: number, t: number): number => {
+        if (t < 0) t += 1;
+        if (t > 1) t -= 1;
+        if (t < 1/6) return p + (q - p) * 6 * t;
+        if (t < 1/2) return q;
+        if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
+        return p;
+      };
+      
+      const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+      const p = 2 * l - q;
+      const r = Math.round(hue2rgb(p, q, h + 1/3) * 255);
+      const g = Math.round(hue2rgb(p, q, h) * 255);
+      const b = Math.round(hue2rgb(p, q, h - 1/3) * 255);
+      
+      return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+    };
+    
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     
     // Set canvas size
     const width = duration * zoom;
-    const height = 300;
+    const height = waveformHeight;
     canvas.width = width;
     canvas.height = height;
     
@@ -428,8 +456,9 @@ const SplitterPage: React.FC<SplitterPageProps> = ({ onBack }) => {
           if (sample > max) max = sample;
         }
         
-        const y1 = centerY + min * (channelHeight / 2 - 2);
-        const y2 = centerY + max * (channelHeight / 2 - 2);
+        const amplitude = (channelHeight / 2 - 2) * amplitudeScale;
+        const y1 = centerY + min * amplitude;
+        const y2 = centerY + max * amplitude;
         
         ctx.moveTo(x, y1);
         ctx.lineTo(x, y2);
@@ -438,9 +467,11 @@ const SplitterPage: React.FC<SplitterPageProps> = ({ onBack }) => {
       ctx.stroke();
       
       // Draw channel label
-      ctx.fillStyle = '#64748b';
-      ctx.font = '12px sans-serif';
-      ctx.fillText(channelIndex === 0 ? 'L' : 'R', 5, yOffset + 15);
+      if (channelData.length > 1) {
+        ctx.fillStyle = '#64748b';
+        ctx.font = '12px sans-serif';
+        ctx.fillText(channelIndex === 0 ? 'L' : 'R', 5, yOffset + 15);
+      }
     });
     
     // Draw regions
@@ -449,7 +480,7 @@ const SplitterPage: React.FC<SplitterPageProps> = ({ onBack }) => {
       const x2 = region.end * zoom;
       const regionWidth = x2 - x1;
       
-      ctx.fillStyle = region.color + '40'; // Add transparency
+      ctx.fillStyle = hslToRgba(region.color, 0.25);
       ctx.fillRect(x1, 0, regionWidth, height);
       
       ctx.strokeStyle = region.color;
@@ -471,7 +502,7 @@ const SplitterPage: React.FC<SplitterPageProps> = ({ onBack }) => {
     ctx.lineTo(playheadX, height);
     ctx.stroke();
     
-  }, [channelData, duration, zoom, regions, currentTime]);
+  }, [channelData, duration, zoom, regions, currentTime, waveformHeight, amplitudeScale]);
 
   // Format time
   const formatTime = (time: number) => {
@@ -649,11 +680,27 @@ const SplitterPage: React.FC<SplitterPageProps> = ({ onBack }) => {
                 >
                   <ZoomIn size={18} className="text-slate-600" />
                 </button>
+                <div className="w-px h-8 bg-slate-200 mx-2" />
+                <button
+                  onClick={() => setWaveformHeight(prev => Math.max(100, prev - 20))}
+                  className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+                  title="减小高度"
+                >
+                  <span className="text-xs font-bold text-slate-600">H-</span>
+                </button>
+                <span className="text-xs text-slate-500 w-12 text-center">{waveformHeight}px</span>
+                <button
+                  onClick={() => setWaveformHeight(prev => Math.min(400, prev + 20))}
+                  className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+                  title="增加高度"
+                >
+                  <span className="text-xs font-bold text-slate-600">H+</span>
+                </button>
               </div>
             </div>
             
             {/* Waveform display */}
-            <div className="flex-1 overflow-auto bg-slate-100 p-4">
+            <div className="overflow-auto bg-slate-100 p-4" style={{ maxHeight: '60vh' }}>
               {isLoading ? (
                 <div className="flex items-center justify-center h-full">
                   <div className="text-slate-500">加载音频中...</div>
@@ -662,12 +709,12 @@ const SplitterPage: React.FC<SplitterPageProps> = ({ onBack }) => {
                 <div
                   ref={waveformContainerRef}
                   className="bg-white rounded-lg shadow-sm overflow-hidden"
-                  style={{ minWidth: duration * zoom + 40 }}
+                  style={{ minWidth: duration * zoom }}
                 >
                   <canvas
                     ref={canvasRef}
                     className="block cursor-crosshair"
-                    style={{ width: duration * zoom, height: 300 }}
+                    style={{ width: duration * zoom, height: waveformHeight }}
                     onMouseDown={handleCanvasMouseDown}
                     onMouseMove={handleCanvasMouseMove}
                     onMouseUp={handleCanvasMouseUp}
@@ -746,39 +793,55 @@ const SplitterPage: React.FC<SplitterPageProps> = ({ onBack }) => {
                   声道选择
                 </label>
                 <div className="space-y-2">
-                  <label className="flex items-center gap-2 p-3 border border-slate-200 rounded-lg cursor-pointer hover:bg-slate-50 transition-colors">
-                    <input
-                      type="radio"
-                      name="channel"
-                      value="both"
-                      checked={exportChannelOption === 'both'}
-                      onChange={(e) => setExportChannelOption(e.target.value as 'both' | 'left' | 'right')}
-                      className="w-4 h-4 text-blue-600"
-                    />
-                    <span className="text-sm text-slate-700">双声道 (立体声)</span>
-                  </label>
-                  <label className="flex items-center gap-2 p-3 border border-slate-200 rounded-lg cursor-pointer hover:bg-slate-50 transition-colors">
-                    <input
-                      type="radio"
-                      name="channel"
-                      value="left"
-                      checked={exportChannelOption === 'left'}
-                      onChange={(e) => setExportChannelOption(e.target.value as 'both' | 'left' | 'right')}
-                      className="w-4 h-4 text-blue-600"
-                    />
-                    <span className="text-sm text-slate-700">仅左声道 (L)</span>
-                  </label>
-                  <label className="flex items-center gap-2 p-3 border border-slate-200 rounded-lg cursor-pointer hover:bg-slate-50 transition-colors">
-                    <input
-                      type="radio"
-                      name="channel"
-                      value="right"
-                      checked={exportChannelOption === 'right'}
-                      onChange={(e) => setExportChannelOption(e.target.value as 'both' | 'left' | 'right')}
-                      className="w-4 h-4 text-blue-600"
-                    />
-                    <span className="text-sm text-slate-700">仅右声道 (R)</span>
-                  </label>
+                  {audioBuffer && audioBuffer.numberOfChannels === 1 ? (
+                    <label className="flex items-center gap-2 p-3 border border-slate-200 rounded-lg cursor-pointer hover:bg-slate-50 transition-colors">
+                      <input
+                        type="radio"
+                        name="channel"
+                        value="both"
+                        checked={exportChannelOption === 'both'}
+                        onChange={(e) => setExportChannelOption(e.target.value as 'both' | 'left' | 'right')}
+                        className="w-4 h-4 text-blue-600"
+                      />
+                      <span className="text-sm text-slate-700">单声道</span>
+                    </label>
+                  ) : (
+                    <>
+                      <label className="flex items-center gap-2 p-3 border border-slate-200 rounded-lg cursor-pointer hover:bg-slate-50 transition-colors">
+                        <input
+                          type="radio"
+                          name="channel"
+                          value="both"
+                          checked={exportChannelOption === 'both'}
+                          onChange={(e) => setExportChannelOption(e.target.value as 'both' | 'left' | 'right')}
+                          className="w-4 h-4 text-blue-600"
+                        />
+                        <span className="text-sm text-slate-700">双声道 (立体声)</span>
+                      </label>
+                      <label className="flex items-center gap-2 p-3 border border-slate-200 rounded-lg cursor-pointer hover:bg-slate-50 transition-colors">
+                        <input
+                          type="radio"
+                          name="channel"
+                          value="left"
+                          checked={exportChannelOption === 'left'}
+                          onChange={(e) => setExportChannelOption(e.target.value as 'both' | 'left' | 'right')}
+                          className="w-4 h-4 text-blue-600"
+                        />
+                        <span className="text-sm text-slate-700">仅左声道 (L)</span>
+                      </label>
+                      <label className="flex items-center gap-2 p-3 border border-slate-200 rounded-lg cursor-pointer hover:bg-slate-50 transition-colors">
+                        <input
+                          type="radio"
+                          name="channel"
+                          value="right"
+                          checked={exportChannelOption === 'right'}
+                          onChange={(e) => setExportChannelOption(e.target.value as 'both' | 'left' | 'right')}
+                          className="w-4 h-4 text-blue-600"
+                        />
+                        <span className="text-sm text-slate-700">仅右声道 (R)</span>
+                      </label>
+                    </>
+                  )}
                 </div>
               </div>
 
