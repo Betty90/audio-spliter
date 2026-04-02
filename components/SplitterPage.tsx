@@ -333,6 +333,32 @@ const SplitterPage: React.FC<SplitterPageProps> = ({ onBack }) => {
     const x = e.clientX - rect.left;
     const time = Math.max(0, Math.min(x / zoom, duration));
     
+    if (dragState.type === 'none' && !isSelecting) {
+      const HANDLE_WIDTH = 6;
+      let cursorSet = false;
+      
+      for (const region of regions) {
+        const x1 = region.start * zoom;
+        const x2 = region.end * zoom;
+        
+        if (Math.abs(x - x1) <= HANDLE_WIDTH || Math.abs(x - x2) <= HANDLE_WIDTH) {
+          canvasRef.current.style.cursor = 'ew-resize';
+          cursorSet = true;
+          break;
+        }
+        
+        if (x >= x1 && x <= x2) {
+          canvasRef.current.style.cursor = 'move';
+          cursorSet = true;
+          break;
+        }
+      }
+      
+      if (!cursorSet) {
+        canvasRef.current.style.cursor = 'default';
+      }
+    }
+    
     if (isSelecting) {
       setSelectionEnd(time);
       return;
@@ -380,6 +406,10 @@ const SplitterPage: React.FC<SplitterPageProps> = ({ onBack }) => {
     setSelectionStart(null);
     setSelectionEnd(null);
     setDragState({ type: 'none' });
+    
+    if (canvasRef.current) {
+      canvasRef.current.style.cursor = 'default';
+    }
   };
 
   const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -796,8 +826,9 @@ const SplitterPage: React.FC<SplitterPageProps> = ({ onBack }) => {
                 >
                   <canvas
                     ref={canvasRef}
-                    className="block cursor-crosshair"
-                    style={{ width: duration * zoom, height: waveformHeight }}
+                    className="block"
+                    id="waveform-canvas"
+                    style={{ width: duration * zoom, height: waveformHeight, cursor: 'default' }}
                     onMouseDown={handleCanvasMouseDown}
                     onMouseMove={handleCanvasMouseMove}
                     onMouseUp={handleCanvasMouseUp}
