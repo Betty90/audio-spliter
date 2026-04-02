@@ -92,13 +92,18 @@ jobs:
           if [ -d "py-dist/server" ]; then
             echo "✓ Found py-dist/server, copying to resources/server/..."
             cp -r py-dist/server/* resources/server/
+          elif [ -d "backend/dist/server" ]; then
+            echo "✓ Found backend/dist/server, copying to resources/server/..."
+            cp -r backend/dist/server/* resources/server/
           elif [ -d "dist/server" ]; then
             echo "✓ Found dist/server, copying to resources/server/..."
             cp -r dist/server/* resources/server/
           else
-            echo "⚠ Warning: Neither py-dist/server nor dist/server found"
+            echo "⚠ Warning: No PyInstaller output found"
             echo "Listing py-dist contents:"
             ls -la py-dist/ 2>/dev/null || echo "py-dist does not exist"
+            echo "Listing backend/dist contents:"
+            ls -la backend/dist/ 2>/dev/null || echo "backend/dist does not exist"
             echo "Listing dist contents:"
             ls -la dist/ 2>/dev/null || echo "dist does not exist"
           fi
@@ -114,6 +119,7 @@ jobs:
           cd ..
           mkdir -p resources
           if exist py-dist\server xcopy /E /I py-dist\server resources\server
+          if exist backend\dist\server xcopy /E /I backend\dist\server resources\server
           if exist dist\server xcopy /E /I dist\server resources\server
         shell: cmd
         continue-on-error: true
