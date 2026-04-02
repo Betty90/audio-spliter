@@ -632,7 +632,7 @@ const SplitterPage: React.FC<SplitterPageProps> = ({ onBack }) => {
   };
 
   return (
-    <div className="flex flex-col h-full p-4 overflow-y-auto">
+    <div className="flex flex-col h-full w-full p-4 overflow-y-auto">
       {/* Header */}
       <div className="mb-4 flex justify-between items-center">
         <div>
@@ -701,7 +701,7 @@ const SplitterPage: React.FC<SplitterPageProps> = ({ onBack }) => {
         }}
       >
         {!audioFile ? (
-          <div className="flex-1 flex flex-col items-center justify-center p-8 w-full">
+          <div className="flex-1 flex flex-col items-center justify-center p-8 w-full h-full">
             <label
               className="flex flex-col items-center justify-center w-full h-64
                 border-2 border-dashed border-blue-300 bg-blue-50/50 rounded-2xl
