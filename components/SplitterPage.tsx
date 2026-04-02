@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { Upload, FileAudio, Play, Pause, Square, ZoomIn, ZoomOut, Scissors, Download, Repeat, X, AlertCircle } from 'lucide-react';
+import { Upload, FileAudio, Play, Pause, Square, ZoomIn, ZoomOut, Download, Repeat, X, AlertCircle } from 'lucide-react';
 import { ACCEPTED_MIME_TYPES } from '../constants';
 import { exportSegmentWithOptions } from '../services/apiService';
 
@@ -41,7 +41,10 @@ const SplitterPage: React.FC<SplitterPageProps> = ({ onBack }) => {
   const [exportChannelOption, setExportChannelOption] = useState<'both' | 'left' | 'right'>('both');
   const [isExporting, setIsExporting] = useState(false);
   const [waveformHeight, setWaveformHeight] = useState(200);
-  const [amplitudeScale, setAmplitudeScale] = useState(1.5);
+  const [amplitudeScale, setAmplitudeScale] = useState(2.5);
+  const [isSelecting, setIsSelecting] = useState(false);
+  const [selectionStart, setSelectionStart] = useState<number | null>(null);
+  const [selectionEnd, setSelectionEnd] = useState<number | null>(null);
   
   const audioRef = useRef<HTMLAudioElement>(null);
   const waveformContainerRef = useRef<HTMLDivElement>(null);
@@ -284,7 +287,7 @@ const SplitterPage: React.FC<SplitterPageProps> = ({ onBack }) => {
   };
 
   const handleCanvasMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!canvasRef.current || regions.length === 0) return;
+    if (!canvasRef.current) return;
     
     const rect = canvasRef.current.getBoundingClientRect();
     const x = e.clientX - rect.left;
@@ -292,6 +295,7 @@ const SplitterPage: React.FC<SplitterPageProps> = ({ onBack }) => {
     
     const HANDLE_WIDTH = 6;
     
+    // Check if clicking on an existing region
     for (const region of regions) {
       const x1 = region.start * zoom;
       const x2 = region.end * zoom;
@@ -315,15 +319,26 @@ const SplitterPage: React.FC<SplitterPageProps> = ({ onBack }) => {
       }
     }
     
+    // Clicking on empty area - start selection
+    setIsSelecting(true);
+    setSelectionStart(time);
+    setSelectionEnd(time);
     setSelectedRegionId(null);
   };
 
   const handleCanvasMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (dragState.type === 'none' || !canvasRef.current) return;
+    if (!canvasRef.current) return;
     
     const rect = canvasRef.current.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const time = Math.max(0, Math.min(x / zoom, duration));
+    
+    if (isSelecting) {
+      setSelectionEnd(time);
+      return;
+    }
+    
+    if (dragState.type === 'none') return;
     
     setRegions(prev => prev.map(region => {
       if (region.id !== dragState.regionId) return region;
@@ -343,6 +358,27 @@ const SplitterPage: React.FC<SplitterPageProps> = ({ onBack }) => {
   };
 
   const handleCanvasMouseUp = () => {
+    if (isSelecting && selectionStart !== null && selectionEnd !== null) {
+      const start = Math.min(selectionStart, selectionEnd);
+      const end = Math.max(selectionStart, selectionEnd);
+      const duration = end - start;
+      
+      // Only create region if selection is > 0.1 seconds
+      if (duration > 0.1) {
+        const newRegion: AudioRegion = {
+          id: `region-${Date.now()}`,
+          start,
+          end,
+          color: `hsl(${Math.random() * 360}, 70%, 60%)`
+        };
+        setRegions(prev => [...prev, newRegion]);
+        setSelectedRegionId(newRegion.id);
+      }
+    }
+    
+    setIsSelecting(false);
+    setSelectionStart(null);
+    setSelectionEnd(null);
     setDragState({ type: 'none' });
   };
 
@@ -474,14 +510,45 @@ const SplitterPage: React.FC<SplitterPageProps> = ({ onBack }) => {
       }
     });
     
+    if (channelData.length > 1) {
+      const separatorY = height / 2;
+      ctx.strokeStyle = '#cbd5e1';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([5, 5]);
+      ctx.beginPath();
+      ctx.moveTo(0, separatorY);
+      ctx.lineTo(width, separatorY);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    
+    if (isSelecting && selectionStart !== null && selectionEnd !== null) {
+      const x1 = Math.min(selectionStart, selectionEnd) * zoom;
+      const x2 = Math.max(selectionStart, selectionEnd) * zoom;
+      const selWidth = x2 - x1;
+      
+      ctx.save();
+      ctx.globalAlpha = 0.3;
+      ctx.fillStyle = '#3b82f6';
+      ctx.fillRect(x1, 0, selWidth, height);
+      ctx.restore();
+      
+      ctx.strokeStyle = '#3b82f6';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(x1, 0, selWidth, height);
+    }
+    
     // Draw regions
     regions.forEach(region => {
       const x1 = region.start * zoom;
       const x2 = region.end * zoom;
       const regionWidth = x2 - x1;
       
-      ctx.fillStyle = hslToRgba(region.color, 0.25);
+      ctx.save();
+      ctx.globalAlpha = 0.25;
+      ctx.fillStyle = region.color;
       ctx.fillRect(x1, 0, regionWidth, height);
+      ctx.restore();
       
       ctx.strokeStyle = region.color;
       ctx.lineWidth = 2;
@@ -502,7 +569,7 @@ const SplitterPage: React.FC<SplitterPageProps> = ({ onBack }) => {
     ctx.lineTo(playheadX, height);
     ctx.stroke();
     
-  }, [channelData, duration, zoom, regions, currentTime, waveformHeight, amplitudeScale]);
+  }, [channelData, duration, zoom, regions, currentTime, waveformHeight, amplitudeScale, isSelecting, selectionStart, selectionEnd]);
 
   // Format time
   const formatTime = (time: number) => {
@@ -628,13 +695,7 @@ const SplitterPage: React.FC<SplitterPageProps> = ({ onBack }) => {
               </div>
 
               <div className="flex items-center gap-2">
-                <button
-                  onClick={addRegion}
-                  className="flex items-center gap-1 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
-                >
-                  <Scissors size={14} />
-                  添加片段
-                </button>
+                <span className="text-xs text-slate-500 mr-2">在波形上拖拽选择片段</span>
                 {selectedRegionId && (
                   <>
                     <button
