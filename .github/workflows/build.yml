@@ -125,6 +125,12 @@ jobs:
           )
           echo "Final contents of resources\server:"
           dir resources\server /s /b 2>nul || echo "resources\server is empty or does not exist"
+          echo "Testing server.exe startup..."
+          timeout /t 5
+          start /B resources\server\server.exe --port 9999 > server_test.log 2>&1
+          timeout /t 10
+          type server_test.log
+          taskkill /F /IM server.exe 2>nul || echo "Server process not found or already stopped"
         shell: cmd
         continue-on-error: true
 
