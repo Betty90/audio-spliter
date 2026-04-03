@@ -34,8 +34,11 @@ function getPythonExecutablePath(): { command: string; args: string[] } {
     };
   }
 
+  const isWindows = process.platform === 'win32';
+  const executableName = isWindows ? 'server.exe' : 'server';
+
   return {
-    command: path.join(process.resourcesPath, 'server', 'server'),
+    command: path.join(process.resourcesPath, 'server', executableName),
     args: ['--port', '0'],
   };
 }
