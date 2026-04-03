@@ -2,10 +2,7 @@ name: Build and Release
 
 on:
   push:
-    branches: [main, master, dev/fanwendi]
     tags: ['v*']
-  pull_request:
-    branches: [main, master]
   workflow_dispatch:
     inputs:
       publish:
@@ -117,10 +114,17 @@ jobs:
           cd backend
           pyinstaller server.spec --clean --noconfirm
           cd ..
+          echo "Creating resources directory..."
           mkdir -p resources
-          if exist py-dist\server xcopy /E /I py-dist\server resources\server
-          if exist backend\dist\server xcopy /E /I backend\dist\server resources\server
-          if exist dist\server xcopy /E /I dist\server resources\server
+          echo "Checking for PyInstaller output..."
+          if exist backend\dist\server (
+            echo "✓ Found backend\dist\server, copying to resources\server\..."
+            xcopy /E /I /Y backend\dist\server resources\server
+          ) else (
+            echo "⚠ Warning: backend\dist\server not found"
+          )
+          echo "Final contents of resources\server:"
+          dir resources\server /s /b 2>nul || echo "resources\server is empty or does not exist"
         shell: cmd
         continue-on-error: true
 
