@@ -136,15 +136,14 @@ jobs:
           echo "Final contents of resources\server:"
           dir resources\server /s /b 2>nul || echo "resources\server is empty or does not exist"
           echo "Testing server.exe startup..."
-          timeout /t 5
           start /B resources\server\server.exe --port 9999 > server_test.log 2>&1
-          timeout /t 10
-          type server_test.log
-          powershell -NoProfile -Command "try { $r = Invoke-RestMethod -Uri 'http://127.0.0.1:9999/health' -TimeoutSec 5; if ($r.status -ne 'ok') { Write-Error 'Unexpected health response'; exit 1 } } catch { Write-Error $_; exit 1 }"
+          powershell -NoProfile -Command "$deadline = (Get-Date).AddSeconds(30); do { Start-Sleep -Seconds 2; try { $r = Invoke-RestMethod -Uri 'http://127.0.0.1:9999/health' -TimeoutSec 5; if ($r.status -eq 'ok') { exit 0 } } catch { Write-Host ('Waiting for server: ' + $_.Exception.Message) } } while ((Get-Date) -lt $deadline); Write-Error 'server.exe did not become healthy'; exit 1"
           if errorlevel 1 (
+            type server_test.log
             taskkill /F /IM server.exe 2>nul || echo "Server process not found or already stopped"
             exit /b 1
           )
+          type server_test.log
           taskkill /F /IM server.exe 2>nul || echo "Server process not found or already stopped"
         shell: cmd
 
