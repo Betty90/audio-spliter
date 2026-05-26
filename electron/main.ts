@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron';
 import path from 'path';
 import { getPythonPort, stopPythonProcess, waitForPython, setShuttingDown } from './python-manager.js';
 import { logInfo, logError } from './logger.js';
@@ -112,6 +112,10 @@ app.whenReady().then(async () => {
     createWindow();
   } catch (error) {
     logError(`[Main] Failed to start Python backend: ${error}`);
+    dialog.showErrorBox(
+      'AudioSlicer AI failed to start',
+      `The bundled Python backend could not be started.\n\n${error}`
+    );
     loadingWindow?.close();
     loadingWindow = null;
     app.quit();

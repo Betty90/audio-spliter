@@ -189,7 +189,7 @@ async function packageApp() {
   log('Packaging complete!', 'green');
 }
 
-function copyResources() {
+function copyResources(requirePythonBackend = false) {
   logStep('COPYING RESOURCES');
 
   const resourcesDir = join(rootDir, 'resources');
@@ -200,28 +200,33 @@ function copyResources() {
     mkdirSync(resourcesDir, { recursive: true });
   }
 
-  const pythonBuildDir = join(rootDir, 'backend', 'dist', 'server');
+  const pythonBuildCandidates = [
+    join(rootDir, 'py-dist', 'server'),
+    join(rootDir, 'backend', 'dist', 'server'),
+    join(rootDir, 'dist', 'server'),
+  ];
+  const pythonBuildDir = pythonBuildCandidates.find(existsSync);
   const serverResourcesDir = join(resourcesDir, 'server');
-  
-  if (existsSync(pythonBuildDir)) {
-    log('Copying Python backend build output...', 'blue');
-    
+
+  if (pythonBuildDir) {
+    log(`Copying Python backend build output from ${pythonBuildDir}...`, 'blue');
+
     if (existsSync(serverResourcesDir)) {
       log('Removing existing resources/server...', 'yellow');
       rmSync(serverResourcesDir, { recursive: true, force: true });
     }
-    
+
     const copyRecursive = (src, dest) => {
       if (!existsSync(dest)) {
         mkdirSync(dest, { recursive: true });
       }
-      
+
       const entries = readdirSync(src, { withFileTypes: true });
-      
+
       for (const entry of entries) {
         const srcPath = join(src, entry.name);
         const destPath = join(dest, entry.name);
-        
+
         if (entry.isDirectory()) {
           copyRecursive(srcPath, destPath);
         } else {
@@ -229,12 +234,17 @@ function copyResources() {
         }
       }
     };
-    
+
     copyRecursive(pythonBuildDir, serverResourcesDir);
     log(`Copied Python backend to resources/server`, 'green');
   } else {
-    log('Python build output not found at backend/dist/server', 'yellow');
-    log('Skipping Python backend copy...', 'yellow');
+    log('Python build output not found in py-dist/server, backend/dist/server, or dist/server', 'yellow');
+    if (requirePythonBackend) {
+      log('Python backend is required for packaging; aborting.', 'red');
+      process.exit(1);
+    } else {
+      log('Skipping Python backend copy...', 'yellow');
+    }
   }
 
   log('Resources ready!', 'green');
@@ -308,7 +318,7 @@ ${'='.repeat(60)}
       await buildElectron();
     }
 
-    copyResources();
+    copyResources(shouldPackage || shouldBuildPython);
 
     if (shouldPackage) {
       await packageApp();

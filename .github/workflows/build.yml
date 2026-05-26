@@ -2,7 +2,10 @@ name: Build and Release
 
 on:
   push:
+    branches: [main, master]
     tags: ['v*']
+  pull_request:
+    branches: [main, master]
   workflow_dispatch:
     inputs:
       publish:
@@ -78,7 +81,6 @@ jobs:
         run: |
           chmod +x scripts/build-python.sh
           ./scripts/build-python.sh
-        continue-on-error: true
 
       - name: Copy Python backend to resources (Unix)
         if: matrix.platform != 'win'
@@ -103,6 +105,7 @@ jobs:
             ls -la backend/dist/ 2>/dev/null || echo "backend/dist does not exist"
             echo "Listing dist contents:"
             ls -la dist/ 2>/dev/null || echo "dist does not exist"
+            exit 1
           fi
           echo "Final contents of resources/server:"
           ls -la resources/server/ 2>/dev/null || echo "resources/server is empty"
@@ -115,13 +118,20 @@ jobs:
           pyinstaller server.spec --clean --noconfirm
           cd ..
           echo "Creating resources directory..."
-          mkdir -p resources
+          if not exist resources mkdir resources
           echo "Checking for PyInstaller output..."
-          if exist backend\dist\server (
+          if exist py-dist\server (
+            echo "✓ Found py-dist\server, copying to resources\server\..."
+            xcopy /E /I /Y py-dist\server resources\server
+          ) else if exist backend\dist\server (
             echo "✓ Found backend\dist\server, copying to resources\server\..."
             xcopy /E /I /Y backend\dist\server resources\server
+          ) else if exist dist\server (
+            echo "✓ Found dist\server, copying to resources\server\..."
+            xcopy /E /I /Y dist\server resources\server
           ) else (
-            echo "⚠ Warning: backend\dist\server not found"
+            echo "⚠ Warning: No PyInstaller output found"
+            exit /b 1
           )
           echo "Final contents of resources\server:"
           dir resources\server /s /b 2>nul || echo "resources\server is empty or does not exist"
@@ -130,9 +140,13 @@ jobs:
           start /B resources\server\server.exe --port 9999 > server_test.log 2>&1
           timeout /t 10
           type server_test.log
+          powershell -NoProfile -Command "try { $r = Invoke-RestMethod -Uri 'http://127.0.0.1:9999/health' -TimeoutSec 5; if ($r.status -ne 'ok') { Write-Error 'Unexpected health response'; exit 1 } } catch { Write-Error $_; exit 1 }"
+          if errorlevel 1 (
+            taskkill /F /IM server.exe 2>nul || echo "Server process not found or already stopped"
+            exit /b 1
+          )
           taskkill /F /IM server.exe 2>nul || echo "Server process not found or already stopped"
         shell: cmd
-        continue-on-error: true
 
       - name: Build and package (macOS)
         if: matrix.platform == 'mac'

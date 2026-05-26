@@ -1,4 +1,5 @@
 import { spawn, ChildProcess } from 'child_process';
+import { existsSync } from 'fs';
 import http from 'http';
 import path from 'path';
 import { app, dialog } from 'electron';
@@ -108,6 +109,11 @@ export function spawnPythonProcess(): Promise<number> {
     const { command, args } = getPythonExecutablePath();
 
     logInfo(`[Python Manager] Starting Python server: ${command} ${args.join(' ')}`);
+
+    if (app.isPackaged && !existsSync(command)) {
+      reject(new Error(`Bundled Python server executable not found: ${command}`));
+      return;
+    }
 
     const env = {
       ...process.env,
