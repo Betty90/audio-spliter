@@ -24,6 +24,8 @@ from PyInstaller.building.datastruct import Tree
 IS_WINDOWS = sys.platform.startswith('win')
 IS_MACOS = sys.platform == 'darwin'
 IS_LINUX = sys.platform.startswith('linux')
+STRIP_BINARIES = not IS_WINDOWS
+USE_UPX = not IS_WINDOWS
 
 # Project root directory
 # PyInstaller passes the spec file path in a global variable
@@ -287,8 +289,8 @@ exe = EXE(
     name='server',
     debug=False,
     bootloader_ignore_signals=False,
-    strip=True,  # Strip symbols to reduce size
-    upx=True,    # Compress with UPX if available
+    strip=STRIP_BINARIES,  # Stripping Windows binaries can corrupt bundled DLL loading
+    upx=USE_UPX,    # UPX can break python311.dll loading on Windows runners
     upx_exclude=[],
     runtime_tmpdir=None,
     console=True,  # Keep console for logging/debugging
@@ -306,8 +308,8 @@ coll = COLLECT(
     a.binaries,
     a.zipfiles,
     a.datas,
-    strip=True,
-    upx=True,
+    strip=STRIP_BINARIES,
+    upx=USE_UPX,
     name='server',
     dist_dir=dist_dir
 )
