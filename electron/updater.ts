@@ -30,7 +30,7 @@ export function initUpdater(silent = false): void {
     logInfo(`[Updater] Update available: ${info.version}`);
     isUpdateChecking = false;
 
-    if (!silent) {
+    if (!isSilent) {
       dialog.showMessageBox({
         type: 'info',
         title: 'Update Available',
@@ -45,7 +45,7 @@ export function initUpdater(silent = false): void {
     logInfo('[Updater] No updates available');
     isUpdateChecking = false;
 
-    if (!silent) {
+    if (!isSilent) {
       dialog.showMessageBox({
         type: 'info',
         title: 'No Updates',
@@ -59,7 +59,7 @@ export function initUpdater(silent = false): void {
     logError(`[Updater] Error: ${err.message}`);
     isUpdateChecking = false;
 
-    if (!silent) {
+    if (!isSilent) {
       dialog.showErrorBox(
         'Update Error',
         `An error occurred while checking for updates:\n${err.message}`
@@ -75,7 +75,7 @@ export function initUpdater(silent = false): void {
     logInfo(`[Updater] Update downloaded: ${info.version}`);
     isUpdateChecking = false;
 
-    if (!silent) {
+    if (!isSilent) {
       dialog.showMessageBox({
         type: 'question',
         title: 'Install Update',
@@ -118,25 +118,43 @@ export async function checkForUpdates(silent = false): Promise<void> {
 
   if (!app.isPackaged) {
     logWarn('[Updater] Skipping update check in development mode');
+    if (!silent) {
+      dialog.showMessageBox({
+        type: 'info',
+        title: 'Updates Unavailable',
+        message: 'Update checks are only available in packaged builds.',
+        buttons: ['OK'],
+      });
+    }
     return;
   }
 
   try {
     isSilent = silent;
     logInfo('[Updater] Checking for updates...');
-    await electronAutoUpdater.checkForUpdatesAndNotify();
+    await electronAutoUpdater.checkForUpdates();
   } catch (error) {
-    logError(`[Updater] Failed to check for updates: ${error}`);
+    const message = error instanceof Error ? error.message : String(error);
+    logError(`[Updater] Failed to check for updates: ${message}`);
+
+    if (!silent) {
+      dialog.showErrorBox(
+        'Update Error',
+        `An error occurred while checking for updates:\n${message}`
+      );
+    }
   }
 }
 
 /**
- * Check for updates on startup (disabled)
- * Auto-updater is disabled to prevent GitHub 404 errors
+ * Check for updates on startup
  */
 export function checkForUpdatesOnStartup(): void {
-  logInfo('[Updater] Auto-updater is disabled');
-  return;
+  setTimeout(() => {
+    checkForUpdates(true).catch((error) => {
+      logWarn(`[Updater] Silent startup update check failed: ${error}`);
+    });
+  }, 5000);
 }
 
 /**

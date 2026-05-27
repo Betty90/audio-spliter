@@ -1,8 +1,9 @@
-import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, shell, Menu } from 'electron';
+import type { MenuItemConstructorOptions } from 'electron';
 import path from 'path';
 import { getPythonPort, stopPythonProcess, waitForPython, setShuttingDown } from './python-manager.js';
 import { logInfo, logError } from './logger.js';
-import { initUpdater, checkForUpdatesOnStartup } from './updater.js';
+import { initUpdater, checkForUpdatesOnStartup, checkForUpdates } from './updater.js';
 
 let mainWindow: BrowserWindow | null = null;
 let loadingWindow: BrowserWindow | null = null;
@@ -54,6 +55,88 @@ function createLoadingWindow(): BrowserWindow {
   return window;
 }
 
+function createApplicationMenu(): void {
+  const checkUpdatesItem: MenuItemConstructorOptions = {
+    label: '检查更新...',
+    click: () => {
+      checkForUpdates(false).catch((error) => {
+        logError(`[Main] Manual update check failed: ${error}`);
+      });
+    },
+  };
+
+  const viewMenu: MenuItemConstructorOptions = {
+    label: '视图',
+    submenu: [
+      { role: 'reload' },
+      { role: 'forceReload' },
+      { role: 'toggleDevTools' },
+      { type: 'separator' },
+      { role: 'resetZoom' },
+      { role: 'zoomIn' },
+      { role: 'zoomOut' },
+      { type: 'separator' },
+      { role: 'togglefullscreen' },
+    ],
+  };
+
+  const template: MenuItemConstructorOptions[] = process.platform === 'darwin'
+    ? [
+        {
+          label: app.name,
+          submenu: [
+            { role: 'about' },
+            checkUpdatesItem,
+            { type: 'separator' },
+            { role: 'services' },
+            { type: 'separator' },
+            { role: 'hide' },
+            { role: 'hideOthers' },
+            { role: 'unhide' },
+            { type: 'separator' },
+            { role: 'quit' },
+          ],
+        },
+        {
+          label: '编辑',
+          submenu: [
+            { role: 'undo' },
+            { role: 'redo' },
+            { type: 'separator' },
+            { role: 'cut' },
+            { role: 'copy' },
+            { role: 'paste' },
+            { role: 'selectAll' },
+          ],
+        },
+        viewMenu,
+        {
+          label: '窗口',
+          submenu: [
+            { role: 'minimize' },
+            { role: 'close' },
+          ],
+        },
+      ]
+    : [
+        {
+          label: '文件',
+          submenu: [
+            { role: 'quit' },
+          ],
+        },
+        viewMenu,
+        {
+          label: '帮助',
+          submenu: [
+            checkUpdatesItem,
+          ],
+        },
+      ];
+
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+}
+
 function createWindow(): void {
   mainWindow = new BrowserWindow({
     width: 1400,
@@ -96,6 +179,8 @@ function createWindow(): void {
 }
 
 app.whenReady().then(async () => {
+  createApplicationMenu();
+
   ipcMain.handle('get-python-port', async () => {
     if (!getPythonPort()) {
       await waitForPython();
