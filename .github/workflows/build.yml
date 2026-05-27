@@ -193,71 +193,13 @@ jobs:
             release/*.deb
           if-no-files-found: warn
 
-  release:
+  notify:
     needs: build
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v')
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: artifacts
-          pattern: '*-artifacts'
-
-      - name: List artifacts
-        run: |
-          find artifacts -type f -name "*.*"
-
-      - name: Create Release
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ github.ref_name }}
-          release_name: AudioSlicer AI ${{ github.ref_name }}
-          draft: true
-          prerelease: ${{ contains(github.ref_name, 'beta') || contains(github.ref_name, 'alpha') }}
-          body: |
-            ## AudioSlicer AI ${{ github.ref_name }}
-
-            ### Downloads
-            - **macOS**: Download `.dmg` for Intel Macs, `.zip` for Apple Silicon Macs
-            - **Windows**: Download `Setup.exe` for installer or `portable.exe` for portable version
-            - **Linux**: Download `.AppImage` for universal Linux package or `.deb` for Debian/Ubuntu
-
-            ### What's New
-            See [CHANGELOG.md](CHANGELOG.md) for details.
-
-            ### System Requirements
-            - **macOS**: macOS 10.14+ (Mojave or later)
-            - **Windows**: Windows 10/11 (64-bit)
-            - **Linux**: Ubuntu 20.04+, Fedora 34+, or equivalent
-
-      - name: Upload Release Assets
-        run: |
-          for file in artifacts/*-artifacts/*; do
-            if [ -f "$file" ]; then
-              echo "Uploading: $file"
-              gh release upload "${{ github.ref_name }}" "$file" --clobber
-            fi
-          done
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        continue-on-error: true
-
-  notify:
-    needs: [build, release]
-    runs-on: ubuntu-latest
-    if: always() && (needs.release.result == 'success' || needs.build.result == 'success')
+    if: always() && needs.build.result == 'success'
 
     steps:
       - name: Build Success Notification
         run: |
           echo "✅ Build completed successfully!"
           echo "Platform builds: ${{ needs.build.result }}"
-          echo "Release creation: ${{ needs.release.result }}"
