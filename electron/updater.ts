@@ -1,11 +1,29 @@
-import { app, dialog } from 'electron';
+import { app, dialog, shell } from 'electron';
 import { logInfo, logError, logWarn } from './logger.js';
 import electronUpdater from 'electron-updater';
 const { autoUpdater: electronAutoUpdater } = electronUpdater;
 import type { UpdateInfo } from 'electron-updater';
 
+const GITHUB_RELEASES_URL = 'https://github.com/Betty90/audio-spliter/releases/latest';
+
 let isUpdateChecking = false;
 let isSilent = false;
+
+function showMacUpdatePrompt(info: UpdateInfo): void {
+  dialog.showMessageBox({
+    type: 'info',
+    title: 'Update Available',
+    message: `A new version (${info.version}) is available.`,
+    detail: 'macOS automatic installation requires a signed build. Please download and install the latest release manually.',
+    buttons: ['Download Manually', 'Later'],
+    defaultId: 0,
+    cancelId: 1,
+  }).then((result) => {
+    if (result.response === 0) {
+      shell.openExternal(GITHUB_RELEASES_URL);
+    }
+  });
+}
 
 /**
  * Initialize auto-updater
@@ -15,8 +33,8 @@ export function initUpdater(silent = false): void {
   isSilent = silent;
 
   // Configure auto-updater
-  electronAutoUpdater.autoDownload = true;
-  electronAutoUpdater.autoInstallOnAppQuit = true;
+  electronAutoUpdater.autoDownload = process.platform !== 'darwin';
+  electronAutoUpdater.autoInstallOnAppQuit = process.platform !== 'darwin';
   electronAutoUpdater.allowPrerelease = false;
   electronAutoUpdater.allowDowngrade = false;
 
@@ -29,6 +47,11 @@ export function initUpdater(silent = false): void {
   electronAutoUpdater.on('update-available', (info: UpdateInfo) => {
     logInfo(`[Updater] Update available: ${info.version}`);
     isUpdateChecking = false;
+
+    if (process.platform === 'darwin') {
+      showMacUpdatePrompt(info);
+      return;
+    }
 
     if (!isSilent) {
       dialog.showMessageBox({

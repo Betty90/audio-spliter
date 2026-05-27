@@ -24,6 +24,14 @@ class AutoUpdateWiringTest(unittest.TestCase):
         self.assertIn("checkForUpdates(false)", main)
         self.assertIn("Menu.setApplicationMenu", main)
 
+    def test_macos_update_check_prompts_for_manual_release_download(self):
+        updater = read("electron/updater.ts")
+
+        self.assertIn("process.platform !== 'darwin'", updater)
+        self.assertIn("GITHUB_RELEASES_URL", updater)
+        self.assertIn("shell.openExternal(GITHUB_RELEASES_URL)", updater)
+        self.assertIn("Download Manually", updater)
+
 
 if __name__ == "__main__":
     unittest.main()
