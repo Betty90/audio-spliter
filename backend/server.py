@@ -46,13 +46,19 @@ def setup_ffmpeg():
         # Running in a normal Python environment
         base_dir = os.getcwd()
 
+    ffmpeg_names = ["ffmpeg.exe", "ffmpeg"]
+    possible_dirs = [
+        os.path.join(base_dir, "node_modules", "ffmpeg-static"),
+        os.path.join(base_dir, "_internal", "node_modules", "ffmpeg-static"),
+        os.path.join(os.getcwd(), "node_modules", "ffmpeg-static"),
+        os.path.join(os.getcwd(), "..", "node_modules", "ffmpeg-static"),
+        "/node_modules/ffmpeg-static",
+        "/app/node_modules/ffmpeg-static",
+    ]
     possible_paths = [
-        os.path.join(base_dir, "node_modules", "ffmpeg-static", "ffmpeg"),
-        os.path.join(base_dir, "_internal", "node_modules", "ffmpeg-static", "ffmpeg"),
-        os.path.join(os.getcwd(), "node_modules", "ffmpeg-static", "ffmpeg"),
-        os.path.join(os.getcwd(), "..", "node_modules", "ffmpeg-static", "ffmpeg"),
-        "/node_modules/ffmpeg-static/ffmpeg",
-        "/app/node_modules/ffmpeg-static/ffmpeg",
+        os.path.join(directory, name)
+        for directory in possible_dirs
+        for name in ffmpeg_names
     ]
 
     found_path = None

@@ -138,6 +138,7 @@ jobs:
           echo "Testing server.exe startup..."
           start /B resources\server\server.exe --port 9999 > server_test.log 2>&1
           powershell -NoProfile -Command "$deadline = (Get-Date).AddSeconds(30); do { Start-Sleep -Seconds 2; try { $r = Invoke-RestMethod -Uri 'http://127.0.0.1:9999/health' -TimeoutSec 5; if ($r.status -eq 'ok') { exit 0 } } catch { Write-Host ('Waiting for server: ' + $_.Exception.Message) } } while ((Get-Date) -lt $deadline); Write-Error 'server.exe did not become healthy'; exit 1"
+          powershell -NoProfile -Command "$debug = Invoke-RestMethod -Uri 'http://127.0.0.1:9999/debug' -TimeoutSec 5; Write-Host ('FFmpeg binary: ' + $debug.ffmpeg_binary); if ($debug.ffmpeg_binary -eq 'ffmpeg' -or -not (Test-Path $debug.ffmpeg_binary)) { Write-Error ('Bundled FFmpeg is not available: ' + $debug.ffmpeg_binary); exit 1 }"
           if errorlevel 1 (
             type server_test.log
             taskkill /F /IM server.exe 2>nul || echo "Server process not found or already stopped"
