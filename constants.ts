@@ -13,9 +13,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
 };
 
 export const SPEAKER_COLORS = [
-  'rgba(59, 130, 246, 0.5)', // Blue
-  'rgba(16, 185, 129, 0.5)', // Emerald
-  'rgba(245, 158, 11, 0.5)', // Amber
+  'rgba(0, 122, 61, 0.5)',   // PSBC Green
+  'rgba(242, 185, 31, 0.5)', // PSBC Gold
+  'rgba(34, 197, 94, 0.5)',  // Green
   'rgba(239, 68, 68, 0.5)',  // Red
   'rgba(139, 92, 246, 0.5)', // Violet
   'rgba(236, 72, 153, 0.5)', // Pink

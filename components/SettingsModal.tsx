@@ -68,16 +68,16 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, settings
                     value={formData.backendUrl}
                     onChange={(e) => setFormData({ ...formData, backendUrl: e.target.value })}
                     placeholder="自动使用 Electron 管理的后端"
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-sm font-mono"
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--psbc-green)] focus:border-[var(--psbc-green)] outline-none transition-all text-sm font-mono"
                 />
             </div>
             <div className="flex gap-2 text-xs text-gray-500">
                 <span className="text-gray-400">快速设置:</span>
-                <button onClick={() => setFormData({ ...formData, backendUrl: '' })} className="hover:text-blue-600 underline font-medium text-blue-600">自动 (推荐)</button>
+                <button onClick={() => setFormData({ ...formData, backendUrl: '' })} className="hover:text-[var(--psbc-green)] underline font-medium text-[var(--psbc-green)]">自动 (推荐)</button>
                 <span className="text-gray-300">|</span>
-                <button onClick={() => setLocalhost('ip')} className="hover:text-blue-600 underline">127.0.0.1</button>
+                <button onClick={() => setLocalhost('ip')} className="hover:text-[var(--psbc-green)] underline">127.0.0.1</button>
                 <span className="text-gray-300">|</span>
-                <button onClick={() => setLocalhost('name')} className="hover:text-blue-600 underline">localhost</button>
+                <button onClick={() => setLocalhost('name')} className="hover:text-[var(--psbc-green)] underline">localhost</button>
             </div>
           </div>
 
@@ -95,10 +95,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, settings
                     max="10"
                     value={formData.numSpeakers}
                     onChange={(e) => setFormData({ ...formData, numSpeakers: parseInt(e.target.value) })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--psbc-green)] outline-none text-sm"
                   />
                   {formData.numSpeakers === 0 && (
-                      <span className="flex items-center px-3 bg-blue-100 text-blue-700 rounded text-sm font-medium whitespace-nowrap">
+                      <span className="flex items-center px-3 bg-[var(--psbc-green-soft)] text-[var(--psbc-green)] rounded text-sm font-medium whitespace-nowrap">
                           自动检测
                       </span>
                   )}
@@ -117,7 +117,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, settings
                 min="0.1"
                 value={formData.minSegmentDuration}
                 onChange={(e) => setFormData({ ...formData, minSegmentDuration: parseFloat(e.target.value) })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--psbc-green)] outline-none text-sm"
               />
               <p className="text-xs text-gray-500">忽略短于此时长的片段</p>
             </div>
@@ -134,7 +134,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, settings
                 max="1.0"
                 value={formData.silenceThreshold || 0.005}
                 onChange={(e) => setFormData({ ...formData, silenceThreshold: parseFloat(e.target.value) })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--psbc-green)] outline-none text-sm"
               />
               <p className="text-xs text-gray-500">能量低于此值视为静音 (默认 0.005)</p>
             </div>
@@ -150,7 +150,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, settings
                 min="0.0"
                 value={formData.minSilenceDuration !== undefined ? formData.minSilenceDuration : 0.5}
                 onChange={(e) => setFormData({ ...formData, minSilenceDuration: parseFloat(e.target.value) })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--psbc-green)] outline-none text-sm"
               />
               <p className="text-xs text-gray-500">短于此时长的静音将被忽略 (视为连续语音)</p>
             </div>
@@ -171,7 +171,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, settings
                     // Ensure odd number
                     setFormData({ ...formData, smoothingWidth: val % 2 === 0 ? val + 1 : val });
                 }}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--psbc-green)] outline-none text-sm"
               />
               <p className="text-xs text-gray-500">中值滤波窗口大小 (奇数)，越大越平滑</p>
             </div>
@@ -184,7 +184,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, settings
               <select
                 value={formData.sampleRate || 16000}
                 onChange={(e) => setFormData({ ...formData, sampleRate: parseInt(e.target.value) })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm bg-white"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--psbc-green)] outline-none text-sm bg-white"
               >
                 <option value="8000">8000 Hz (电话音质)</option>
                 <option value="16000">16000 Hz (默认, 推荐)</option>
@@ -221,7 +221,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, settings
           )}
           <button
             onClick={handleSave}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+            className="px-4 py-2 bg-[var(--psbc-green)] hover:bg-[var(--psbc-green-dark)] text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
           >
             <Save size={16} />
             保存设置

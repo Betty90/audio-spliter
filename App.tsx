@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Upload, FileAudio, Settings as SettingsIcon, Loader2, Music4, AlertCircle, Link as LinkIcon, RefreshCw, Layers, Repeat, Trash2, Activity, Scissors } from 'lucide-react';
+import { Upload, FileAudio, Settings as SettingsIcon, Loader2, Music4, AlertCircle, Link as LinkIcon, RefreshCw, Layers, Repeat, Trash2, Activity, Scissors, Keyboard } from 'lucide-react';
 import { AudioFile, FileStatus, AudioSegment, AppSettings } from './types';
 import { analyzeAudio, checkHealth as checkBackendHealth } from './services/apiService';
 import { DEFAULT_SETTINGS, ACCEPTED_MIME_TYPES } from './constants';
@@ -172,56 +172,61 @@ const App: React.FC = () => {
   const activeFile = files.find(f => f.id === selectedFileId) || null;
 
   return (
-    <div className="flex h-screen w-full flex-col bg-slate-50">
+    <div className="app-shell flex h-screen w-full flex-col bg-slate-100 text-slate-900">
       
       {/* Header */}
-      <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-6 shadow-sm z-20">
-        <div className="flex items-center gap-2">
-            <div className="bg-blue-600 p-2 rounded-lg">
+      <header className="h-14 bg-white/95 border-b border-slate-200 flex items-center justify-between px-4 lg:px-5 shadow-sm z-20 backdrop-blur">
+        <div className="flex items-center gap-2.5 min-w-0">
+            <div className="relative bg-[var(--psbc-green)] p-2 rounded-lg shadow-sm">
+                <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-[var(--psbc-gold)] ring-2 ring-white" />
                 <Music4 className="text-white" size={20} />
             </div>
-            <h1 className="text-xl font-bold text-slate-800 tracking-tight hidden md:block">AudioSlicer <span className="text-blue-600">Pro</span></h1>
+            <div className="hidden md:block min-w-0">
+                <h1 className="text-[15px] font-bold text-slate-900 tracking-tight leading-tight">AudioSlicer Pro</h1>
+                <p className="text-[11px] text-slate-500 leading-tight">离线音频切片工作台</p>
+            </div>
         </div>
 
         {/* Navigation Tabs */}
-        <div className="flex bg-slate-100 p-1 rounded-lg">
+        <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200">
             <button
                 onClick={() => setActiveTab('analyzer')}
-                className={`flex items-center gap-2 px-4 py-1.5 rounded-md text-sm font-medium transition-all ${activeTab === 'analyzer' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-md text-sm font-medium transition-all ${activeTab === 'analyzer' ? 'bg-white text-[var(--psbc-green)] shadow-sm ring-1 ring-[var(--psbc-green-line)]' : 'text-slate-500 hover:text-slate-700'}`}
             >
                 <Layers size={16} />
                 分析
             </button>
             <button
                 onClick={() => setActiveTab('splitter')}
-                className={`flex items-center gap-2 px-4 py-1.5 rounded-md text-sm font-medium transition-all ${activeTab === 'splitter' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-md text-sm font-medium transition-all ${activeTab === 'splitter' ? 'bg-white text-[var(--psbc-green)] shadow-sm ring-1 ring-[var(--psbc-green-line)]' : 'text-slate-500 hover:text-slate-700'}`}
             >
                 <Scissors size={16} />
                 分割
             </button>
             <button
                 onClick={() => setActiveTab('converter')}
-                className={`flex items-center gap-2 px-4 py-1.5 rounded-md text-sm font-medium transition-all ${activeTab === 'converter' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-md text-sm font-medium transition-all ${activeTab === 'converter' ? 'bg-white text-[var(--psbc-green)] shadow-sm ring-1 ring-[var(--psbc-green-line)]' : 'text-slate-500 hover:text-slate-700'}`}
             >
                 <Repeat size={16} />
                 转换
             </button>
         </div>
 
-        <div className="flex items-center gap-4">
-            <div className="text-sm text-slate-500 hidden md:block">
-                按 <kbd className="bg-slate-100 border border-slate-300 rounded px-1.5 py-0.5 text-xs mx-1">Cmd/Ctrl+V</kbd> 粘贴音频
+        <div className="flex items-center gap-2">
+            <div className="hidden lg:flex items-center gap-1.5 rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs text-slate-500">
+                <Keyboard size={13} />
+                <kbd className="rounded bg-white px-1.5 py-0.5 font-mono text-[11px] text-slate-600 shadow-sm">Cmd/Ctrl+V</kbd>
             </div>
             <button 
                 onClick={() => setIsLabOpen(true)}
-                className="p-2 hover:bg-slate-100 rounded-full text-slate-600 transition-colors"
+                className="p-2 hover:bg-slate-100 rounded-lg text-slate-600 transition-colors"
                 title="算法验证实验室"
             >
                 <Activity size={20} />
             </button>
             <button 
                 onClick={() => setIsSettingsOpen(true)}
-                className="p-2 hover:bg-slate-100 rounded-full text-slate-600 transition-colors"
+                className="p-2 hover:bg-slate-100 rounded-lg text-slate-600 transition-colors"
                 title="设置"
             >
                 <SettingsIcon size={20} />
@@ -242,7 +247,7 @@ const App: React.FC = () => {
         </div>
       )}
 
-      <div className="flex flex-1 overflow-hidden relative">
+      <div className="flex flex-1 overflow-hidden relative min-h-0">
         
         {activeTab === 'converter' ? (
             <ConverterPage 
@@ -257,16 +262,16 @@ const App: React.FC = () => {
             <>
                 {/* Main Content Area */}
                 <main 
-                    className={`flex-1 flex flex-col p-6 overflow-hidden relative transition-all duration-300 ${isDragging ? 'bg-blue-50/50 ring-4 ring-blue-200 inset-0' : ''}`}
+                    className={`flex-1 flex flex-col gap-4 p-4 lg:p-5 overflow-hidden relative transition-all duration-300 min-w-0 ${isDragging ? 'bg-[var(--psbc-green-soft)]/50 ring-4 ring-[var(--psbc-green-line)] inset-0' : ''}`}
                     onDragOver={onDragOver}
                     onDragLeave={onDragLeave}
                     onDrop={onDrop}
                 >
                     {/* Toolbar / Upload Area */}
-                    <div className="mb-6 flex flex-wrap gap-4 items-center">
+                    <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm min-h-[72px]">
                         <button 
                             onClick={() => document.getElementById('file-upload')?.click()}
-                            className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-lg shadow-blue-200 cursor-pointer transition-transform active:scale-95 font-medium"
+                            className="flex shrink-0 items-center gap-2 px-4 py-2.5 bg-[var(--psbc-green)] hover:bg-[var(--psbc-green-dark)] text-white rounded-lg shadow-sm cursor-pointer transition-transform active:scale-95 font-medium text-sm"
                         >
                             <Upload size={18} />
                             上传音频文件
@@ -281,8 +286,8 @@ const App: React.FC = () => {
                         </button>
                         
                         {/* Placeholder for URL input */}
-                        <div className="relative group hidden md:block">
-                            <div className="flex items-center border border-gray-300 rounded-xl bg-white px-3 py-2.5 w-64 focus-within:ring-2 focus-within:ring-blue-100 focus-within:border-blue-400 transition-all">
+                        <div className="relative group hidden xl:block">
+                            <div className="flex items-center border border-slate-200 rounded-lg bg-slate-50 px-3 py-2.5 w-60 focus-within:ring-2 focus-within:ring-[var(--psbc-green-line)] focus-within:border-[var(--psbc-green)] transition-all">
                                 <LinkIcon size={16} className="text-gray-400 mr-2" />
                                 <input 
                                     type="text" 
@@ -294,21 +299,21 @@ const App: React.FC = () => {
                         </div>
                         
                         {files.length > 0 && (
-                             <div className="flex gap-2 overflow-x-auto pb-1 max-w-2xl px-2 scrollbar-thin">
+                             <div className="flex min-w-0 flex-1 gap-2 overflow-x-auto py-1 px-1">
                                 {files.map(file => (
                                     <button
                                         key={file.id}
                                         onClick={() => setSelectedFileId(file.id)}
                                         title={file.error || file.name}
-                                        className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm border whitespace-nowrap transition-all group
+                                        className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm border whitespace-nowrap transition-all group shrink-0
                                             ${selectedFileId === file.id 
-                                                ? 'bg-blue-50 border-blue-200 text-blue-700 ring-2 ring-blue-100' 
+                                                ? 'bg-[var(--psbc-green)] border-[var(--psbc-green)] text-white shadow-sm' 
                                                 : file.status === FileStatus.ERROR 
                                                     ? 'bg-red-50 border-red-200 text-red-700 hover:bg-red-100'
-                                                    : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+                                                    : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}
                                     >
                                         {file.status === FileStatus.ANALYZING ? (
-                                            <Loader2 size={14} className="animate-spin text-blue-500" />
+                                            <Loader2 size={14} className="animate-spin text-[var(--psbc-green)]" />
                                         ) : file.status === FileStatus.ERROR ? (
                                             <AlertCircle size={14} className="text-red-500" />
                                         ) : (
@@ -319,7 +324,7 @@ const App: React.FC = () => {
                                         {file.status === FileStatus.COMPLETED && (
                                             <div 
                                                 onClick={(e) => { e.stopPropagation(); handleReanalyzeRequest(file.id); }}
-                                                className={`ml-1 p-1 rounded-full hover:bg-black/10 transition-all ${selectedFileId === file.id ? 'text-blue-400 hover:text-blue-600' : 'text-gray-300 hover:text-blue-500'}`}
+                                                className={`ml-1 p-1 rounded-full hover:bg-black/10 transition-all ${selectedFileId === file.id ? 'text-white/70 hover:text-white' : 'text-slate-300 hover:text-[var(--psbc-green)]'}`}
                                                 title="重新分析"
                                             >
                                                 <RefreshCw size={12} />
@@ -328,7 +333,7 @@ const App: React.FC = () => {
 
                                         <div 
                                             onClick={(e) => handleDeleteFile(e, file.id)}
-                                            className={`ml-1 p-1 rounded-full hover:bg-black/10 transition-all ${selectedFileId === file.id ? 'text-blue-400 hover:text-red-600' : 'text-gray-300 hover:text-red-500'}`}
+                                            className={`ml-1 p-1 rounded-full hover:bg-black/10 transition-all ${selectedFileId === file.id ? 'text-white/70 hover:text-red-200' : 'text-slate-300 hover:text-red-500'}`}
                                             title="删除文件"
                                         >
                                             <Trash2 size={12} />
@@ -341,10 +346,12 @@ const App: React.FC = () => {
 
                     {/* Empty State */}
                     {files.length === 0 && (
-                        <div className="flex-1 flex flex-col items-center justify-center border-2 border-dashed border-slate-300 rounded-2xl m-4 bg-slate-50/50 text-slate-400">
-                            <Upload size={64} className="mb-4 text-slate-300" />
-                            <h3 className="text-xl font-semibold text-slate-600 mb-2">拖拽音频文件到此处</h3>
-                            <p className="max-w-md text-center text-sm">
+                        <div className="flex-1 flex flex-col items-center justify-center border border-dashed border-slate-300 rounded-2xl bg-white/70 text-slate-400 shadow-inner">
+                            <div className="mb-4 rounded-2xl bg-slate-100 p-5">
+                                <Upload size={44} className="text-slate-400" />
+                            </div>
+                            <h3 className="text-lg font-semibold text-slate-700 mb-2">拖拽音频文件到此处</h3>
+                            <p className="max-w-md text-center text-sm leading-6">
                                 支持 .mp3, .wav, .m4a, .mp4 等格式<br/>
                                 Electron 会自动启动内置 Python 后端
                             </p>
@@ -365,8 +372,8 @@ const App: React.FC = () => {
                     
                     {/* Drag Overlay */}
                     {isDragging && (
-                        <div className="absolute inset-0 bg-blue-500/10 backdrop-blur-sm z-50 flex items-center justify-center border-4 border-blue-500 rounded-lg m-4">
-                            <div className="bg-white px-8 py-4 rounded-xl shadow-xl text-blue-600 font-bold text-lg animate-bounce">
+                        <div className="absolute inset-0 bg-[var(--psbc-green-soft)]/80 backdrop-blur-sm z-50 flex items-center justify-center border-4 border-[var(--psbc-green)] rounded-lg m-4">
+                            <div className="bg-white px-8 py-4 rounded-xl shadow-xl text-[var(--psbc-green)] font-bold text-lg animate-bounce">
                                 松开鼠标以上传
                             </div>
                         </div>

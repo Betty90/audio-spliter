@@ -493,7 +493,7 @@ const SplitterPage: React.FC<SplitterPageProps> = ({ onBack }) => {
     canvas.height = height;
     
     // Clear canvas
-    ctx.fillStyle = '#f8fafc';
+    ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, width, height);
     
     // Draw channels
@@ -504,7 +504,7 @@ const SplitterPage: React.FC<SplitterPageProps> = ({ onBack }) => {
       const centerY = yOffset + channelHeight / 2;
       
       ctx.beginPath();
-      ctx.strokeStyle = channelIndex === 0 ? '#3b82f6' : '#10b981';
+      ctx.strokeStyle = channelIndex === 0 ? '#007a3d' : '#f2b91f';
       ctx.lineWidth = 1;
       
       const samplesPerPixel = Math.ceil(data.length / width);
@@ -559,11 +559,11 @@ const SplitterPage: React.FC<SplitterPageProps> = ({ onBack }) => {
       
       ctx.save();
       ctx.globalAlpha = 0.3;
-      ctx.fillStyle = '#3b82f6';
+      ctx.fillStyle = '#007a3d';
       ctx.fillRect(x1, 0, selWidth, height);
       ctx.restore();
       
-      ctx.strokeStyle = '#3b82f6';
+      ctx.strokeStyle = '#007a3d';
       ctx.lineWidth = 2;
       ctx.strokeRect(x1, 0, selWidth, height);
     }
@@ -632,19 +632,19 @@ const SplitterPage: React.FC<SplitterPageProps> = ({ onBack }) => {
   };
 
   return (
-    <div className="flex flex-col h-full w-full p-4 overflow-y-auto">
+    <div className="flex flex-col h-full w-full p-4 lg:p-5 overflow-hidden gap-4">
       {/* Header */}
-      <div className="mb-4 flex justify-between items-center">
-        <div>
-          <h2 className="text-2xl font-bold text-slate-800 mb-1">音频分割</h2>
-          <p className="text-slate-500 text-sm">支持 MP3、WAV、M4A 等格式，可视化波形编辑</p>
+      <div className="flex justify-between items-center rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm gap-4">
+        <div className="min-w-0">
+          <h2 className="text-lg font-bold text-slate-900 leading-tight">音频分割</h2>
+          <p className="text-slate-500 text-sm">可视化波形编辑、拖拽选择片段并按声道导出</p>
         </div>
         
         <div className="flex items-center gap-2">
           {!audioFile ? (
             <button
               onClick={() => document.getElementById('splitter-file-upload')?.click()}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
+              className="flex items-center gap-2 px-4 py-2 bg-[var(--psbc-green)] hover:bg-[var(--psbc-green-dark)] text-white rounded-lg font-medium transition-colors"
             >
               <Upload size={16} />
               上传音频
@@ -660,7 +660,7 @@ const SplitterPage: React.FC<SplitterPageProps> = ({ onBack }) => {
             <>
               <button
                 onClick={() => document.getElementById('splitter-file-upload')?.click()}
-                className="flex items-center gap-2 px-3 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                className="tool-button"
               >
                 <FileAudio size={16} />
                 更换文件
@@ -678,7 +678,7 @@ const SplitterPage: React.FC<SplitterPageProps> = ({ onBack }) => {
       </div>
 
       {error && (
-        <div className="bg-red-50 border-b border-red-200 px-4 py-3 flex items-center justify-between">
+        <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2 text-red-700">
             <AlertCircle size={18} />
             <span className="text-sm">{error}</span>
@@ -693,7 +693,7 @@ const SplitterPage: React.FC<SplitterPageProps> = ({ onBack }) => {
       )}
 
       <div
-        className="flex-1 flex flex-col overflow-hidden"
+        className="flex-1 flex flex-col overflow-hidden min-h-0"
         onDragOver={(e) => { e.preventDefault(); }}
         onDrop={(e) => {
           e.preventDefault();
@@ -701,27 +701,27 @@ const SplitterPage: React.FC<SplitterPageProps> = ({ onBack }) => {
         }}
       >
         {!audioFile ? (
-          <div className="flex-1 flex flex-col items-center justify-center p-8 w-full h-full">
+          <div className="flex-1 flex flex-col items-center justify-center w-full h-full rounded-xl border border-dashed border-slate-300 bg-white shadow-inner">
             <label
-              className="flex flex-col items-center justify-center w-full h-64
-                border-2 border-dashed border-blue-300 bg-blue-50/50 rounded-2xl
-                cursor-pointer hover:bg-blue-50 transition-colors"
+              className="flex flex-col items-center justify-center w-full h-full cursor-pointer hover:bg-slate-50 transition-colors rounded-xl"
               onClick={() => document.getElementById('splitter-file-upload')?.click()}
             >
-              <Upload size={48} className="text-blue-500 mb-4" />
-              <span className="font-medium text-blue-600 text-lg">点击或拖拽上传音频</span>
-              <span className="text-sm text-blue-400 mt-2">支持 MP3、WAV、M4A 等格式</span>
+              <div className="mb-4 rounded-2xl bg-slate-100 p-5">
+                <Upload size={42} className="text-slate-500" />
+              </div>
+              <span className="font-semibold text-slate-700 text-lg">点击或拖拽上传音频</span>
+              <span className="text-sm text-slate-400 mt-2">支持 MP3、WAV、M4A 等格式</span>
             </label>
           </div>
         ) : (
           <>
             {/* Toolbar */}
-            <div className="h-14 bg-white border-b border-slate-200 flex items-center justify-between px-4">
-              <div className="flex items-center gap-2">
+            <div className="min-h-14 bg-white border border-slate-200 rounded-xl shadow-sm flex items-center justify-between px-3 py-2 gap-3">
+              <div className="flex items-center gap-2 min-w-0">
                 {/* Playback controls */}
                 <button
                   onClick={togglePlayback}
-                  className="p-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+                  className="p-2 bg-[var(--psbc-green)] hover:bg-[var(--psbc-green-dark)] text-white rounded-lg transition-colors"
                 >
                   {isPlaying ? <Pause size={18} /> : <Play size={18} />}
                 </button>
@@ -733,7 +733,7 @@ const SplitterPage: React.FC<SplitterPageProps> = ({ onBack }) => {
                 </button>
                 <button
                   onClick={() => setIsLooping(!isLooping)}
-                  className={`p-2 rounded-lg transition-colors border ${isLooping ? 'bg-blue-600 text-white border-blue-600' : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700'}`}
+                  className={`p-2 rounded-lg transition-colors border ${isLooping ? 'bg-[var(--psbc-green)] text-white border-[var(--psbc-green)]' : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700'}`}
                   title={isLooping ? '循环播放开启' : '循环播放关闭'}
                 >
                   <Repeat size={18} />
@@ -741,18 +741,17 @@ const SplitterPage: React.FC<SplitterPageProps> = ({ onBack }) => {
 
                 <div className="w-px h-8 bg-slate-200 mx-2" />
 
-                <div className="text-sm font-mono text-slate-600">
+                <div className="text-sm font-mono text-slate-600 whitespace-nowrap">
                   {formatTime(currentTime)} / {formatTime(duration)}
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-slate-500 mr-2">在波形上拖拽选择片段</span>
+              <div className="flex items-center gap-2 overflow-x-auto shrink-0">
                 {selectedRegionId && (
                   <>
                     <button
                       onClick={() => playRegion(selectedRegionId)}
-                      className="p-2 bg-white border border-slate-200 hover:border-blue-300 hover:text-blue-600 text-slate-700 rounded-lg transition-colors"
+                      className="p-2 bg-white border border-slate-200 hover:border-[var(--psbc-green)] hover:text-[var(--psbc-green)] text-slate-700 rounded-lg transition-colors"
                       title="播放片段"
                     >
                       <Play size={16} />
@@ -765,7 +764,7 @@ const SplitterPage: React.FC<SplitterPageProps> = ({ onBack }) => {
                     </button>
                     <button
                       onClick={openExportModal}
-                      className="flex items-center gap-1 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
+                      className="flex items-center gap-1 px-3 py-2 bg-[var(--psbc-green)] hover:bg-[var(--psbc-green-dark)] text-white rounded-lg text-sm font-medium transition-colors"
                     >
                       <Download size={14} />
                       导出
@@ -813,15 +812,15 @@ const SplitterPage: React.FC<SplitterPageProps> = ({ onBack }) => {
             </div>
             
             {/* Waveform display */}
-            <div className="overflow-auto bg-slate-100 p-4" style={{ maxHeight: '60vh' }}>
+            <div className="overflow-auto bg-white border border-slate-200 rounded-xl shadow-sm p-3 flex-1 min-h-0">
               {isLoading ? (
-                <div className="flex items-center justify-center h-full">
+                <div className="flex items-center justify-center h-full min-h-[260px]">
                   <div className="text-slate-500">加载音频中...</div>
                 </div>
               ) : (
                 <div
                   ref={waveformContainerRef}
-                  className="bg-white rounded-lg shadow-sm overflow-hidden"
+                  className="bg-white rounded-lg overflow-hidden"
                   style={{ minWidth: duration * zoom }}
                 >
                   <canvas
@@ -841,17 +840,17 @@ const SplitterPage: React.FC<SplitterPageProps> = ({ onBack }) => {
             
             {/* Regions list */}
             {regions.length > 0 && (
-              <div className="h-48 bg-white border-t border-slate-200 overflow-auto">
-                <div className="p-4">
-                  <h4 className="text-sm font-semibold text-slate-700 mb-3">片段列表</h4>
-                  <div className="space-y-2">
+              <div className="h-44 bg-white border border-slate-200 rounded-xl shadow-sm overflow-auto">
+                <div className="p-3">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">片段列表</h4>
+                  <div className="space-y-1.5">
                     {regions.map(region => (
                       <div
                         key={region.id}
                         onClick={() => setSelectedRegionId(region.id)}
-                        className={`flex items-center justify-between p-3 rounded-lg cursor-pointer transition-colors ${
+                        className={`flex items-center justify-between p-2.5 rounded-lg cursor-pointer transition-colors ${
                           selectedRegionId === region.id
-                            ? 'bg-blue-50 border border-blue-200'
+                            ? 'bg-[var(--psbc-green-soft)] border border-[var(--psbc-green-line)]'
                             : 'bg-slate-50 border border-slate-200 hover:bg-slate-100'
                         }`}
                       >
@@ -915,7 +914,7 @@ const SplitterPage: React.FC<SplitterPageProps> = ({ onBack }) => {
                         value="both"
                         checked={exportChannelOption === 'both'}
                         onChange={(e) => setExportChannelOption(e.target.value as 'both' | 'left' | 'right')}
-                        className="w-4 h-4 text-blue-600"
+                        className="w-4 h-4 text-[var(--psbc-green)]"
                       />
                       <span className="text-sm text-slate-700">单声道</span>
                     </label>
@@ -928,7 +927,7 @@ const SplitterPage: React.FC<SplitterPageProps> = ({ onBack }) => {
                           value="both"
                           checked={exportChannelOption === 'both'}
                           onChange={(e) => setExportChannelOption(e.target.value as 'both' | 'left' | 'right')}
-                          className="w-4 h-4 text-blue-600"
+                          className="w-4 h-4 text-[var(--psbc-green)]"
                         />
                         <span className="text-sm text-slate-700">双声道 (立体声)</span>
                       </label>
@@ -939,7 +938,7 @@ const SplitterPage: React.FC<SplitterPageProps> = ({ onBack }) => {
                           value="left"
                           checked={exportChannelOption === 'left'}
                           onChange={(e) => setExportChannelOption(e.target.value as 'both' | 'left' | 'right')}
-                          className="w-4 h-4 text-blue-600"
+                          className="w-4 h-4 text-[var(--psbc-green)]"
                         />
                         <span className="text-sm text-slate-700">仅左声道 (L)</span>
                       </label>
@@ -950,7 +949,7 @@ const SplitterPage: React.FC<SplitterPageProps> = ({ onBack }) => {
                           value="right"
                           checked={exportChannelOption === 'right'}
                           onChange={(e) => setExportChannelOption(e.target.value as 'both' | 'left' | 'right')}
-                          className="w-4 h-4 text-blue-600"
+                          className="w-4 h-4 text-[var(--psbc-green)]"
                         />
                         <span className="text-sm text-slate-700">仅右声道 (R)</span>
                       </label>
@@ -970,7 +969,7 @@ const SplitterPage: React.FC<SplitterPageProps> = ({ onBack }) => {
                   <button
                     onClick={exportRegion}
                     disabled={isExporting}
-                    className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+                    className="flex-1 px-4 py-2 bg-[var(--psbc-green)] hover:bg-[var(--psbc-green-dark)] disabled:bg-slate-300 text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
                   >
                     {isExporting ? (
                       <>

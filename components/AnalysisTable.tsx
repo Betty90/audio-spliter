@@ -248,74 +248,80 @@ const AnalysisTable: React.FC<AnalysisTableProps> = ({ files, activeSegmentId, o
 
   if (files.length === 0 || dataRows.length === 0) {
     return (
-        <div className="flex flex-col items-center justify-center h-64 text-gray-400 bg-white rounded-xl border border-dashed border-gray-300 m-4">
-            <TableIcon size={48} className="mb-2 opacity-50" />
-            <p>处理音频文件后将在此显示分析表格</p>
+        <div className="flex flex-1 flex-col items-center justify-center text-slate-400 bg-white rounded-xl border border-dashed border-slate-300">
+            <TableIcon size={42} className="mb-3 opacity-50" />
+            <p className="text-sm">处理音频文件后将在此显示分析表格</p>
         </div>
     );
   }
 
   return (
-    <div className="flex flex-col h-full bg-white shadow-sm rounded-xl overflow-hidden border border-gray-200">
-      <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50">
-        <div className="flex items-center gap-4">
-            <h2 className="text-lg font-semibold text-gray-800">响应时延分析表</h2>
+    <div className="flex flex-col h-full bg-white shadow-sm rounded-xl overflow-hidden border border-slate-200 min-h-0">
+      <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between bg-slate-50/80 gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-white border border-slate-200 text-slate-600 shadow-sm">
+                <TableIcon size={17} />
+            </div>
+            <div className="min-w-0">
+                <h2 className="text-sm font-bold text-slate-900 leading-tight">响应时延分析</h2>
+                <p className="text-xs text-slate-500 leading-tight">{dataRows.length} 行结果 · {files.length} 个文件</p>
+            </div>
             {selectedStats && selectedStats.count > 1 && (
-                <div className="flex items-center gap-2 px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-medium animate-in fade-in slide-in-from-left-2">
+                <div className="hidden sm:flex items-center gap-2 px-2.5 py-1 bg-[var(--psbc-green-soft)] text-[var(--psbc-green)] rounded-md text-xs font-semibold border border-[var(--psbc-green-line)]">
                     <span>已选 {selectedStats.count} 项</span>
-                    <span className="w-px h-3 bg-blue-300"></span>
+                    <span className="w-px h-3 bg-[var(--psbc-gold)]"></span>
                     <span>平均时延: {selectedStats.avg.toFixed(3)}s</span>
                 </div>
             )}
         </div>
-        <div className="flex gap-2">
-            <div className="flex items-center bg-white border border-gray-200 rounded-lg p-1 mr-2 shadow-sm">
-                <button onClick={handleSelectAll} className="px-2 py-1 text-xs text-gray-600 hover:bg-gray-100 rounded" title="全选">全选</button>
-                <div className="w-px h-3 bg-gray-200 mx-1"></div>
-                <button onClick={handleSelectOdd} className="px-2 py-1 text-xs text-gray-600 hover:bg-gray-100 rounded" title="选中奇数行">奇数</button>
-                <div className="w-px h-3 bg-gray-200 mx-1"></div>
-                <button onClick={handleSelectEven} className="px-2 py-1 text-xs text-gray-600 hover:bg-gray-100 rounded" title="选中偶数行">偶数</button>
+        <div className="flex gap-2 overflow-x-auto shrink-0">
+            <div className="flex items-center bg-white border border-slate-200 rounded-lg p-1 shadow-sm">
+                <button onClick={handleSelectAll} className="px-2 py-1 text-xs text-slate-600 hover:bg-slate-100 rounded" title="全选">全选</button>
+                <div className="w-px h-3 bg-slate-200 mx-1"></div>
+                <button onClick={handleSelectOdd} className="px-2 py-1 text-xs text-slate-600 hover:bg-slate-100 rounded" title="选中奇数行">奇数</button>
+                <div className="w-px h-3 bg-slate-200 mx-1"></div>
+                <button onClick={handleSelectEven} className="px-2 py-1 text-xs text-slate-600 hover:bg-slate-100 rounded" title="选中偶数行">偶数</button>
             </div>
             
             <button 
                 onClick={downloadIntermediateJson}
-                className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-gray-700 bg-white hover:bg-gray-100 border border-gray-300 rounded-md transition-colors"
+                className="tool-button"
                 title="下载中间结果 JSON"
             >
                 <FileJson size={14} />
-                导出中间结果
+                JSON
             </button>
             <button 
                 onClick={() => copyToClipboard('tsv')}
-                className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-green-700 bg-green-50 hover:bg-green-100 border border-green-200 rounded-md transition-colors"
+                className="tool-button brand-accent"
             >
-                {copiedFormat === 'tsv' ? '已复制!' : '复制到 Excel'}
+                {copiedFormat === 'tsv' ? '已复制' : 'Excel'}
                 <FileDown size={14} />
             </button>
             <button 
                 onClick={() => copyToClipboard('markdown')}
-                className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-md transition-colors"
+                className="tool-button border-[var(--psbc-green-line)] text-[var(--psbc-green)] hover:bg-[var(--psbc-green-soft)] hover:border-[var(--psbc-green)]"
             >
-                {copiedFormat === 'markdown' ? '已复制!' : '复制 Markdown'}
+                {copiedFormat === 'markdown' ? '已复制' : 'Markdown'}
                 <Copy size={14} />
             </button>
         </div>
       </div>
       
       <div className="overflow-auto flex-1" ref={tableRef}>
-        <table className="w-full text-left text-sm text-gray-600">
-            <thead className="bg-gray-50 text-gray-700 font-medium sticky top-0 z-10 shadow-sm">
+        <table className="w-full text-left text-[13px] text-slate-600">
+            <thead className="bg-white text-slate-600 font-semibold sticky top-0 z-10 shadow-sm border-b border-slate-200">
                 <tr>
-                    <th className="px-6 py-3">播放顺序</th>
-                    <th className="px-6 py-3">音色1放音结束</th>
-                    <th className="px-6 py-3">音色2放音开始</th>
-                    <th className="px-6 py-3">响应时延</th>
-                    <th className="px-6 py-3">录音文件</th>
-                    <th className="px-6 py-3">平均时延</th>
-                    <th className="px-6 py-3">备注</th>
+                    <th className="px-4 py-2.5">播放顺序</th>
+                    <th className="px-4 py-2.5">音色1结束</th>
+                    <th className="px-4 py-2.5">音色2开始</th>
+                    <th className="px-4 py-2.5">响应时延</th>
+                    <th className="px-4 py-2.5">录音文件</th>
+                    <th className="px-4 py-2.5">平均</th>
+                    <th className="px-4 py-2.5">备注</th>
                 </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-slate-100">
                 {dataRows.map((row, idx) => {
                     const avgData = fileAverages.get(row.fileName);
                     const isFirstOfFile = idx === 0 || dataRows[idx-1].fileName !== row.fileName;
@@ -334,33 +340,33 @@ const AnalysisTable: React.FC<AnalysisTableProps> = ({ files, activeSegmentId, o
                             onClick={(e) => handleRowClick(row, e)}
                             className={`transition-colors cursor-pointer scroll-mt-12 ${
                                 isSelected 
-                                    ? 'bg-blue-100 ring-1 ring-blue-300' 
+                                    ? 'bg-[var(--psbc-green-soft)] ring-1 ring-inset ring-[var(--psbc-green-line)]' 
                                     : isActive 
-                                        ? 'bg-blue-50 ring-1 ring-blue-200'
-                                        : 'hover:bg-blue-50/50'
+                                        ? 'bg-slate-100 ring-1 ring-inset ring-slate-200'
+                                        : 'hover:bg-slate-50'
                             }`}
                         >
-                            <td className="px-6 py-3 text-gray-600 font-medium text-sm">
-                                {row.speakerFrom} <span className="text-gray-400 mx-1">→</span> {row.speakerTo}
+                            <td className="px-4 py-2.5 text-slate-700 font-semibold">
+                                {row.speakerFrom} <span className="text-slate-400 mx-1">→</span> {row.speakerTo}
                             </td>
-                            <td className="px-6 py-3 font-mono">
-                                {formatTime(row.segment1End)} <span className="text-xs text-gray-400">({row.segment1End.toFixed(2)})</span>
-                                <div className="text-xs text-gray-400">{row.speakerFrom}</div>
+                            <td className="px-4 py-2.5 font-mono">
+                                {formatTime(row.segment1End)} <span className="text-xs text-slate-400">({row.segment1End.toFixed(2)})</span>
+                                <div className="text-[11px] text-slate-400">{row.speakerFrom}</div>
                             </td>
-                            <td className="px-6 py-3 font-mono">
-                                {formatTime(row.segment2Start)} <span className="text-xs text-gray-400">({row.segment2Start.toFixed(2)})</span>
-                                <div className="text-xs text-gray-400">{row.speakerTo}</div>
+                            <td className="px-4 py-2.5 font-mono">
+                                {formatTime(row.segment2Start)} <span className="text-xs text-slate-400">({row.segment2Start.toFixed(2)})</span>
+                                <div className="text-[11px] text-slate-400">{row.speakerTo}</div>
                             </td>
-                            <td className={`px-6 py-3 ${latencyClass}`}>
+                            <td className={`px-4 py-2.5 ${latencyClass}`}>
                                 {row.latency.toFixed(2)}s
                             </td>
-                            <td className="px-6 py-3 text-gray-800 font-medium">
+                            <td className="px-4 py-2.5 text-slate-800 font-medium max-w-[220px] truncate" title={row.fileName}>
                                 {isFirstOfFile ? row.fileName : ''}
                             </td>
-                            <td className="px-6 py-3 font-semibold text-gray-800">
+                            <td className="px-4 py-2.5 font-semibold text-slate-800">
                                 {avgDisplay}
                             </td>
-                            <td className="px-6 py-3 text-gray-500 text-xs max-w-[150px] truncate" title={row.remark}>
+                            <td className="px-4 py-2.5 text-slate-500 text-xs max-w-[160px] truncate" title={row.remark}>
                                 {row.remark}
                             </td>
                         </tr>

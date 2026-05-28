@@ -161,7 +161,7 @@ const LabModal: React.FC<LabModalProps> = ({ isOpen, onClose, currentSegments, a
         </div>
 
         <div className="p-6 overflow-y-auto flex-1">
-          <div className="bg-blue-50 p-4 rounded-lg text-sm text-blue-800 mb-6">
+          <div className="bg-[var(--psbc-green-soft)] p-4 rounded-lg text-sm text-[var(--psbc-green)] mb-6">
             <h3 className="font-bold mb-2 flex items-center gap-2">
                 <AlertCircle size={16}/>
                 如何使用?

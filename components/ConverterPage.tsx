@@ -137,24 +137,24 @@ const ConverterPage: React.FC<ConverterPageProps> = ({ onBack, existingFiles }) 
   };
 
   return (
-    <div className="flex flex-col h-full p-6 max-w-5xl mx-auto w-full overflow-y-auto">
-      <div className="mb-6 flex justify-between items-center">
-        <div>
-            <h2 className="text-2xl font-bold text-slate-800 mb-1">批量音频格式转换</h2>
-            <p className="text-slate-500 text-sm">支持 MP4, M4A, WAV 等格式互转，批量处理与下载</p>
+    <div className="flex flex-col h-full p-4 lg:p-5 w-full overflow-hidden gap-4">
+      <div className="flex justify-between items-center rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm gap-4">
+        <div className="min-w-0">
+            <h2 className="text-lg font-bold text-slate-900 leading-tight">批量格式转换</h2>
+            <p className="text-slate-500 text-sm">支持 MP4, M4A, WAV, MP3 批量处理与下载</p>
         </div>
         
         {/* Format Selection */}
-        <div className="flex items-center gap-3 bg-white p-2 rounded-xl shadow-sm border border-slate-200">
-            <span className="text-sm font-medium text-slate-600 pl-2">目标格式:</span>
+        <div className="flex items-center gap-3 bg-slate-50 p-1.5 rounded-lg border border-slate-200 shrink-0">
+            <span className="text-xs font-semibold text-slate-500 pl-2">目标</span>
             <div className="flex gap-1">
                 {['mp4', 'm4a', 'wav', 'mp3'].map(fmt => (
                     <button
                         key={fmt}
                         onClick={() => setTargetFormat(fmt)}
-                        className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all
+                        className={`px-3 py-1.5 rounded-md text-sm font-semibold transition-all
                             ${targetFormat === fmt 
-                                ? 'bg-blue-600 text-white shadow-sm' 
+                                ? 'bg-[var(--psbc-green)] text-white shadow-sm' 
                                 : 'text-slate-600 hover:bg-slate-100'}`}
                     >
                         {fmt.toUpperCase()}
@@ -164,25 +164,25 @@ const ConverterPage: React.FC<ConverterPageProps> = ({ onBack, existingFiles }) 
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1 min-h-0">
+      <div className="grid grid-cols-1 lg:grid-cols-[320px_minmax(0,1fr)] gap-4 flex-1 min-h-0">
         
         {/* Left Column: Input Sources */}
-        <div className="lg:col-span-1 flex flex-col gap-4">
+        <div className="flex flex-col gap-4 min-h-0">
             {/* Upload Box */}
-            <label className="flex flex-col items-center justify-center h-40 border-2 border-dashed border-blue-300 bg-blue-50/50 rounded-2xl cursor-pointer hover:bg-blue-50 transition-colors relative group">
-                <div className="flex flex-col items-center text-blue-600 group-hover:scale-105 transition-transform">
-                    <Upload size={32} className="mb-2" />
+            <label className="flex flex-col items-center justify-center h-36 border border-dashed border-slate-300 bg-white rounded-xl cursor-pointer hover:bg-slate-50 transition-colors relative group shadow-sm">
+                <div className="flex flex-col items-center text-slate-700 group-hover:scale-105 transition-transform">
+                    <Upload size={30} className="mb-2 text-slate-500" />
                     <span className="font-medium">点击上传新文件</span>
-                    <span className="text-xs text-blue-400 mt-1">支持批量选择</span>
+                    <span className="text-xs text-slate-400 mt-1">支持批量选择</span>
                 </div>
                 <input type="file" multiple className="hidden" onChange={handleFileChange} accept="audio/*,video/*" />
             </label>
 
             {/* Existing Files List */}
             {existingFiles.length > 0 && (
-                <div className="bg-white rounded-2xl shadow-sm border border-slate-200 flex flex-col overflow-hidden flex-1 max-h-[400px]">
-                    <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
-                        <h3 className="font-semibold text-slate-700 flex items-center gap-2">
+                <div className="bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col overflow-hidden flex-1 min-h-0">
+                    <div className="p-3 border-b border-slate-200 bg-slate-50/80 flex justify-between items-center">
+                        <h3 className="font-semibold text-slate-800 flex items-center gap-2 text-sm">
                             <FileAudio size={18} />
                             已分析文件
                         </h3>
@@ -193,10 +193,10 @@ const ConverterPage: React.FC<ConverterPageProps> = ({ onBack, existingFiles }) 
                             <button
                                 key={file.id}
                                 onClick={() => handleAddExistingFile(file)}
-                                className="w-full text-left p-3 rounded-xl hover:bg-slate-50 flex items-center justify-between group transition-colors border border-transparent hover:border-slate-200"
+                                className="w-full text-left p-2.5 rounded-lg hover:bg-slate-50 flex items-center justify-between group transition-colors border border-transparent hover:border-slate-200"
                             >
                                 <div className="flex items-center gap-3 overflow-hidden">
-                                    <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500 group-hover:bg-white group-hover:text-blue-500 transition-colors">
+                                    <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500 group-hover:bg-white group-hover:text-[var(--psbc-green)] transition-colors">
                                         <FileAudio size={16} />
                                     </div>
                                     <div className="flex-1 min-w-0">
@@ -204,7 +204,7 @@ const ConverterPage: React.FC<ConverterPageProps> = ({ onBack, existingFiles }) 
                                         <div className="text-xs text-slate-400">{(file.file.size / 1024 / 1024).toFixed(2)} MB</div>
                                     </div>
                                 </div>
-                                <Plus size={16} className="text-slate-300 group-hover:text-blue-600" />
+                                <Plus size={16} className="text-slate-300 group-hover:text-[var(--psbc-green)]" />
                             </button>
                         ))}
                     </div>
@@ -213,10 +213,10 @@ const ConverterPage: React.FC<ConverterPageProps> = ({ onBack, existingFiles }) 
         </div>
 
         {/* Right Column: Queue & Actions */}
-        <div className="lg:col-span-2 flex flex-col bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-            <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/30">
-                <h3 className="font-semibold text-slate-700 flex items-center gap-2">
-                    <RefreshCw size={18} className={isConverting ? "animate-spin text-blue-500" : ""} />
+        <div className="flex flex-col bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden min-h-0">
+            <div className="p-3 border-b border-slate-200 flex justify-between items-center bg-slate-50/80">
+                <h3 className="font-semibold text-slate-800 flex items-center gap-2 text-sm">
+                    <RefreshCw size={18} className={isConverting ? "animate-spin text-[var(--psbc-green)]" : ""} />
                     转换队列 ({queue.length})
                 </h3>
                 <div className="flex gap-2">
@@ -231,20 +231,20 @@ const ConverterPage: React.FC<ConverterPageProps> = ({ onBack, existingFiles }) 
                 </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-4 space-y-3 min-h-[300px]">
+            <div className="flex-1 overflow-y-auto p-3 space-y-2 min-h-0">
                 {queue.length === 0 ? (
                     <div className="h-full flex flex-col items-center justify-center text-slate-400 py-12">
-                        <div className="w-16 h-16 rounded-full bg-slate-50 flex items-center justify-center mb-4">
+                        <div className="w-14 h-14 rounded-xl bg-slate-50 flex items-center justify-center mb-4 border border-slate-100">
                             <ArrowRight size={24} className="text-slate-300" />
                         </div>
                         <p>请从左侧添加文件开始转换</p>
                     </div>
                 ) : (
                     queue.map(item => (
-                        <div key={item.id} className="flex items-center gap-4 p-3 rounded-xl border border-slate-100 bg-white hover:border-blue-100 hover:shadow-sm transition-all group">
+                        <div key={item.id} className="flex items-center gap-4 p-3 rounded-lg border border-slate-100 bg-white hover:border-slate-300 hover:shadow-sm transition-all group">
                             <div className="w-10 h-10 rounded-lg bg-slate-50 flex items-center justify-center text-slate-500 shrink-0">
                                 {item.status === 'converting' ? (
-                                    <Loader2 size={20} className="animate-spin text-blue-500" />
+                                    <Loader2 size={20} className="animate-spin text-[var(--psbc-green)]" />
                                 ) : item.status === 'success' ? (
                                     <CheckCircle2 size={20} className="text-green-500" />
                                 ) : item.status === 'error' ? (
@@ -261,7 +261,7 @@ const ConverterPage: React.FC<ConverterPageProps> = ({ onBack, existingFiles }) 
                                 </div>
                                 <div className="flex items-center gap-2 text-xs">
                                     {item.status === 'idle' && <span className="text-slate-500">准备就绪</span>}
-                                    {item.status === 'converting' && <span className="text-blue-500 font-medium animate-pulse">正在转换...</span>}
+                                    {item.status === 'converting' && <span className="text-[var(--psbc-green)] font-medium animate-pulse">正在转换...</span>}
                                     {item.status === 'success' && <span className="text-green-600 font-medium">转换成功</span>}
                                     {item.status === 'error' && <span className="text-red-500 font-medium truncate max-w-[200px]">{item.error}</span>}
                                 </div>
@@ -291,7 +291,7 @@ const ConverterPage: React.FC<ConverterPageProps> = ({ onBack, existingFiles }) 
                 )}
             </div>
 
-            <div className="p-4 border-t border-slate-100 bg-slate-50/50 flex justify-between items-center gap-4">
+            <div className="p-3 border-t border-slate-200 bg-slate-50/80 flex justify-between items-center gap-4">
                 <div className="text-sm text-slate-500">
                     {queue.filter(q => q.status === 'success').length} / {queue.length} 完成
                 </div>
@@ -299,7 +299,7 @@ const ConverterPage: React.FC<ConverterPageProps> = ({ onBack, existingFiles }) 
                     {queue.some(q => q.status === 'success') && (
                         <button
                             onClick={handleDownloadAll}
-                            className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-xl hover:bg-slate-50 hover:border-slate-300 transition-colors shadow-sm font-medium"
+                            className="tool-button"
                         >
                             <Archive size={18} />
                             批量下载
@@ -308,7 +308,7 @@ const ConverterPage: React.FC<ConverterPageProps> = ({ onBack, existingFiles }) 
                     <button
                         onClick={handleConvertAll}
                         disabled={isConverting || queue.length === 0 || queue.every(q => q.status === 'success')}
-                        className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-xl shadow-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all font-medium"
+                        className="flex items-center gap-2 px-5 py-2 bg-[var(--psbc-green)] text-white rounded-lg shadow-sm hover:bg-[var(--psbc-green-dark)] disabled:opacity-50 disabled:cursor-not-allowed transition-all font-medium"
                     >
                         {isConverting ? (
                             <>
