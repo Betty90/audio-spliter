@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Upload, FileAudio, Settings as SettingsIcon, Loader2, Music4, AlertCircle, Link as LinkIcon, RefreshCw, Layers, Repeat, Trash2, Activity, Scissors, Keyboard } from 'lucide-react';
+import { Upload, Music4, AlertCircle, RefreshCw, Layers, Repeat, Scissors, Keyboard } from 'lucide-react';
 import { AudioFile, FileStatus, AudioSegment, AppSettings } from './types';
 import { analyzeAudio, checkHealth as checkBackendHealth } from './services/apiService';
-import { DEFAULT_SETTINGS, ACCEPTED_MIME_TYPES } from './constants';
+import { DEFAULT_SETTINGS } from './constants';
 import SettingsModal from './components/SettingsModal';
 import LabModal from './components/LabModal';
 import WaveformSidebar from './components/WaveformSidebar';
+import AudioFileSidebar from './components/AudioFileSidebar';
 import AnalysisTable from './components/AnalysisTable';
 import ConverterPage from './components/ConverterPage';
 import SplitterPage from './components/SplitterPage';
@@ -21,9 +22,7 @@ const App: React.FC = () => {
   const [editingSettingsFileId, setEditingSettingsFileId] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [backendHealthy, setBackendHealthy] = useState<boolean>(true);
-  const backendLabel = settings.backendUrl && settings.backendUrl !== '/api'
-    ? settings.backendUrl
-    : 'Electron 自动后端';
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [confirmConfig, setConfirmConfig] = useState<ConfirmConfig>({
     isOpen: false,
     title: '',
@@ -74,7 +73,7 @@ const App: React.FC = () => {
   };
 
   const handleFileUpload = async (fileList: FileList | null) => {
-    if (!fileList) return;
+    if (!fileList || fileList.length === 0) return;
 
     // Create file objects
     const newFiles: AudioFile[] = Array.from(fileList).map(file => ({
@@ -86,8 +85,9 @@ const App: React.FC = () => {
       segments: [],
     }));
 
-    // Add to state
+    // Add to state and select the first new file
     setFiles(prev => [...prev, ...newFiles]);
+    setSelectedFileId(newFiles[0].id);
 
     // Trigger analysis immediately
     newFiles.forEach(f => analyze(f, f.settings || settings));
@@ -100,18 +100,24 @@ const App: React.FC = () => {
       }
   };
 
-  const handleDeleteFile = (e: React.MouseEvent, fileId: string) => {
-    e.stopPropagation(); // Prevent selecting the file when clicking delete
+  const handleDeleteFile = (fileId: string) => {
     setConfirmConfig({
       isOpen: true,
       title: '确认删除',
       message: '确定要删除这个音频文件及其分析结果吗？',
       confirmText: '删除',
       onConfirm: () => {
-        setFiles(prev => prev.filter(f => f.id !== fileId));
-        if (selectedFileId === fileId) {
-          setSelectedFileId(null);
-        }
+        setFiles(prev => {
+          const deletedIndex = prev.findIndex(f => f.id === fileId);
+          const remainingFiles = prev.filter(f => f.id !== fileId);
+          const nextFile = remainingFiles[Math.min(deletedIndex, remainingFiles.length - 1)] || null;
+
+          setSelectedFileId(prevSelected => (
+            prevSelected === fileId ? nextFile?.id || null : prevSelected
+          ));
+
+          return remainingFiles;
+        });
       }
     });
   };
@@ -182,8 +188,8 @@ const App: React.FC = () => {
                 <Music4 className="text-white" size={20} />
             </div>
             <div className="hidden md:block min-w-0">
-                <h1 className="text-[15px] font-bold text-slate-900 tracking-tight leading-tight">AudioSlicer Pro</h1>
-                <p className="text-[11px] text-slate-500 leading-tight">离线音频切片工作台</p>
+                <h1 className="text-[15px] font-bold text-slate-900 tracking-tight leading-tight">UAudioLab</h1>
+                <p className="text-[11px] text-slate-500 leading-tight">离线音频工作台</p>
             </div>
         </div>
 
@@ -217,20 +223,6 @@ const App: React.FC = () => {
                 <Keyboard size={13} />
                 <kbd className="rounded bg-white px-1.5 py-0.5 font-mono text-[11px] text-slate-600 shadow-sm">Cmd/Ctrl+V</kbd>
             </div>
-            <button 
-                onClick={() => setIsLabOpen(true)}
-                className="p-2 hover:bg-slate-100 rounded-lg text-slate-600 transition-colors"
-                title="算法验证实验室"
-            >
-                <Activity size={20} />
-            </button>
-            <button 
-                onClick={() => setIsSettingsOpen(true)}
-                className="p-2 hover:bg-slate-100 rounded-lg text-slate-600 transition-colors"
-                title="设置"
-            >
-                <SettingsIcon size={20} />
-            </button>
         </div>
       </header>
       
@@ -239,7 +231,7 @@ const App: React.FC = () => {
         <div className="bg-red-50 border-b border-red-200 px-6 py-2 flex items-center justify-between text-sm text-red-700">
             <div className="flex items-center gap-2">
                 <AlertCircle size={16} />
-                <span>无法连接到后端服务（{backendLabel}）。请确认 Electron 内置后端已启动，或在设置中填写可访问的后端地址。</span>
+                <span>内置音频分析服务未连接，请重试</span>
             </div>
             <button onClick={checkHealth} className="flex items-center gap-1 hover:underline font-medium">
                 <RefreshCw size={14} /> 重试
@@ -260,90 +252,29 @@ const App: React.FC = () => {
             />
         ) : (
             <>
+                {/* Left Sidebar - Audio File List */}
+                <AudioFileSidebar
+                    files={files}
+                    selectedFileId={selectedFileId}
+                    isCollapsed={isSidebarCollapsed}
+                    onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+                    onSelectFile={setSelectedFileId}
+                    onUpload={handleFileUpload}
+                    onRetry={retryFile}
+                    onReanalyze={handleReanalyzeRequest}
+                    onDelete={handleDeleteFile}
+                    onOpenFileSettings={setEditingSettingsFileId}
+                    onOpenGlobalSettings={() => setIsSettingsOpen(true)}
+                    onOpenLab={() => setIsLabOpen(true)}
+                />
+
                 {/* Main Content Area */}
-                <main 
+                <main
                     className={`flex-1 flex flex-col gap-4 p-4 lg:p-5 overflow-hidden relative transition-all duration-300 min-w-0 ${isDragging ? 'bg-[var(--psbc-green-soft)]/50 ring-4 ring-[var(--psbc-green-line)] inset-0' : ''}`}
                     onDragOver={onDragOver}
                     onDragLeave={onDragLeave}
                     onDrop={onDrop}
                 >
-                    {/* Toolbar / Upload Area */}
-                    <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm min-h-[72px]">
-                        <button 
-                            onClick={() => document.getElementById('file-upload')?.click()}
-                            className="flex shrink-0 items-center gap-2 px-4 py-2.5 bg-[var(--psbc-green)] hover:bg-[var(--psbc-green-dark)] text-white rounded-lg shadow-sm cursor-pointer transition-transform active:scale-95 font-medium text-sm"
-                        >
-                            <Upload size={18} />
-                            上传音频文件
-                            <input 
-                                id="file-upload"
-                                type="file" 
-                                multiple 
-                                accept={Object.values(ACCEPTED_MIME_TYPES).flat().join(',')}
-                                className="hidden"
-                                onChange={(e) => handleFileUpload(e.target.files)}
-                            />
-                        </button>
-                        
-                        {/* Placeholder for URL input */}
-                        <div className="relative group hidden xl:block">
-                            <div className="flex items-center border border-slate-200 rounded-lg bg-slate-50 px-3 py-2.5 w-60 focus-within:ring-2 focus-within:ring-[var(--psbc-green-line)] focus-within:border-[var(--psbc-green)] transition-all">
-                                <LinkIcon size={16} className="text-gray-400 mr-2" />
-                                <input 
-                                    type="text" 
-                                    placeholder="输入音频 URL (开发中)" 
-                                    disabled
-                                    className="bg-transparent border-none outline-none text-sm w-full text-gray-600 cursor-not-allowed" 
-                                />
-                            </div>
-                        </div>
-                        
-                        {files.length > 0 && (
-                             <div className="flex min-w-0 flex-1 gap-2 overflow-x-auto py-1 px-1">
-                                {files.map(file => (
-                                    <button
-                                        key={file.id}
-                                        onClick={() => setSelectedFileId(file.id)}
-                                        title={file.error || file.name}
-                                        className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm border whitespace-nowrap transition-all group shrink-0
-                                            ${selectedFileId === file.id 
-                                                ? 'bg-[var(--psbc-green)] border-[var(--psbc-green)] text-white shadow-sm' 
-                                                : file.status === FileStatus.ERROR 
-                                                    ? 'bg-red-50 border-red-200 text-red-700 hover:bg-red-100'
-                                                    : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}
-                                    >
-                                        {file.status === FileStatus.ANALYZING ? (
-                                            <Loader2 size={14} className="animate-spin text-[var(--psbc-green)]" />
-                                        ) : file.status === FileStatus.ERROR ? (
-                                            <AlertCircle size={14} className="text-red-500" />
-                                        ) : (
-                                            <FileAudio size={14} />
-                                        )}
-                                        <span className="truncate max-w-[100px]">{file.name}</span>
-                                        
-                                        {file.status === FileStatus.COMPLETED && (
-                                            <div 
-                                                onClick={(e) => { e.stopPropagation(); handleReanalyzeRequest(file.id); }}
-                                                className={`ml-1 p-1 rounded-full hover:bg-black/10 transition-all ${selectedFileId === file.id ? 'text-white/70 hover:text-white' : 'text-slate-300 hover:text-[var(--psbc-green)]'}`}
-                                                title="重新分析"
-                                            >
-                                                <RefreshCw size={12} />
-                                            </div>
-                                        )}
-
-                                        <div 
-                                            onClick={(e) => handleDeleteFile(e, file.id)}
-                                            className={`ml-1 p-1 rounded-full hover:bg-black/10 transition-all ${selectedFileId === file.id ? 'text-white/70 hover:text-red-200' : 'text-slate-300 hover:text-red-500'}`}
-                                            title="删除文件"
-                                        >
-                                            <Trash2 size={12} />
-                                        </div>
-                                    </button>
-                                ))}
-                             </div>
-                        )}
-                    </div>
-
                     {/* Empty State */}
                     {files.length === 0 && (
                         <div className="flex-1 flex flex-col items-center justify-center border border-dashed border-slate-300 rounded-2xl bg-white/70 text-slate-400 shadow-inner">
@@ -353,23 +284,20 @@ const App: React.FC = () => {
                             <h3 className="text-lg font-semibold text-slate-700 mb-2">拖拽音频文件到此处</h3>
                             <p className="max-w-md text-center text-sm leading-6">
                                 支持 .mp3, .wav, .m4a, .mp4 等格式<br/>
-                                Electron 会自动启动内置 Python 后端
+                                或通过左侧栏上传按钮添加文件
                             </p>
                         </div>
                     )}
 
                     {/* Analysis Table */}
                     {files.length > 0 && (
-                        <AnalysisTable 
-                            files={files} 
+                        <AnalysisTable
+                            files={files}
                             activeSegmentId={activeSegmentId}
                             onSegmentSelect={setActiveSegmentId}
                         />
                     )}
 
-                    {/* Error State Display - Removed or moved to sidebar/toast if needed, but for now relying on list status */}
-                    {/* {activeFile?.status === FileStatus.ERROR && ( ... )} */}
-                    
                     {/* Drag Overlay */}
                     {isDragging && (
                         <div className="absolute inset-0 bg-[var(--psbc-green-soft)]/80 backdrop-blur-sm z-50 flex items-center justify-center border-4 border-[var(--psbc-green)] rounded-lg m-4">
@@ -382,8 +310,8 @@ const App: React.FC = () => {
 
                 {/* Right Sidebar - Waveform Player */}
                 {selectedFileId && (
-                    <WaveformSidebar 
-                        file={activeFile} 
+                    <WaveformSidebar
+                        file={activeFile}
                         onUpdateSegments={handleSegmentUpdate}
                         onClose={() => setSelectedFileId(null)}
                         activeSegmentId={activeSegmentId}

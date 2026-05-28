@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Save, Server, Sliders, Users, RefreshCw, RotateCcw } from 'lucide-react';
+import { X, Save, Sliders, Users, RotateCcw } from 'lucide-react';
 import { AppSettings } from '../types';
 
 interface SettingsModalProps {
@@ -34,14 +34,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, settings
     }
   };
 
-  const setLocalhost = (type: 'ip' | 'name') => {
-      if (type === 'ip') {
-          setFormData({ ...formData, backendUrl: 'http://127.0.0.1:5001' });
-      } else {
-          setFormData({ ...formData, backendUrl: 'http://localhost:5001' });
-      }
-  };
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden">
@@ -56,31 +48,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, settings
         </div>
 
         <div className="p-6 space-y-6">
-          {/* Backend URL */}
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-gray-700 flex items-center gap-2">
-              <Server size={14} />
-              Python 后端地址
-            </label>
-            <div className="flex gap-2">
-                <input
-                    type="text"
-                    value={formData.backendUrl}
-                    onChange={(e) => setFormData({ ...formData, backendUrl: e.target.value })}
-                    placeholder="自动使用 Electron 管理的后端"
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--psbc-green)] focus:border-[var(--psbc-green)] outline-none transition-all text-sm font-mono"
-                />
-            </div>
-            <div className="flex gap-2 text-xs text-gray-500">
-                <span className="text-gray-400">快速设置:</span>
-                <button onClick={() => setFormData({ ...formData, backendUrl: '' })} className="hover:text-[var(--psbc-green)] underline font-medium text-[var(--psbc-green)]">自动 (推荐)</button>
-                <span className="text-gray-300">|</span>
-                <button onClick={() => setLocalhost('ip')} className="hover:text-[var(--psbc-green)] underline">127.0.0.1</button>
-                <span className="text-gray-300">|</span>
-                <button onClick={() => setLocalhost('name')} className="hover:text-[var(--psbc-green)] underline">localhost</button>
-            </div>
-          </div>
-
           <div className="grid grid-cols-2 gap-4">
             {/* Num Speakers */}
             <div className="space-y-2">
@@ -193,17 +160,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, settings
               </select>
               <p className="text-xs text-gray-500">影响分析的频率范围和速度</p>
             </div>
-          </div>
-          
-          <div className="bg-yellow-50 p-3 rounded-lg border border-yellow-100 text-xs text-yellow-800 space-y-1">
-            <p className="font-semibold flex items-center gap-1">
-                <RefreshCw size={12} />
-                连接问题排查:
-            </p>
-            <ul className="list-disc pl-4 space-y-0.5">
-                <li>Electron 模式下默认会自动使用内置 Python 后端。</li>
-                <li>浏览器调试模式下，可手动填写 127.0.0.1 或 localhost 地址。</li>
-            </ul>
           </div>
         </div>
 

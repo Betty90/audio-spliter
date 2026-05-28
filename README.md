@@ -1,8 +1,8 @@
-# AudioSlicer AI 🎵
+# UAudioLab
 
-智能音频切片与说话人分割桌面应用，基于机器学习算法自动识别音频中的不同说话人，支持可视化编辑和片段导出。完全离线运行，无需网络连接。
+离线音频工作台，集音频分析、说话人分割、可视化编辑、片段导出和格式转换于一体。基于机器学习算法自动识别音频中的不同说话人，完全离线运行，无需网络连接。
 
-![AudioSlicer AI](https://github.com/user-attachments/assets/placeholder-screenshot.png)
+![UAudioLab](https://github.com/user-attachments/assets/placeholder-screenshot.png)
 
 ## ✨ 功能特性
 
