@@ -59,8 +59,6 @@ backend/temp/
 # OS
 Thumbs.db
 
-AGENTS.md
-
 # OhMyOpenCode generated files
 .sisyphus/
 release/
