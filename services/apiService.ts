@@ -51,13 +51,13 @@ async function getApiBaseUrl(settings?: AppSettings): Promise<string> {
   if (typeof window !== 'undefined' && window.electron?.getPythonPort) {
     try {
       const port = await getPythonPort();
-      return `http://localhost:${port}`;
+      return `http://127.0.0.1:${port}`;
     } catch {
-      return 'http://localhost:5001';
+      return 'http://127.0.0.1:5001';
     }
   }
 
-  return 'http://localhost:5001';
+  return 'http://127.0.0.1:5001';
 }
 
 export const checkHealth = async (settings?: AppSettings): Promise<{ status: string }> => {

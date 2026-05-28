@@ -21,6 +21,9 @@ const App: React.FC = () => {
   const [editingSettingsFileId, setEditingSettingsFileId] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [backendHealthy, setBackendHealthy] = useState<boolean>(true);
+  const backendLabel = settings.backendUrl && settings.backendUrl !== '/api'
+    ? settings.backendUrl
+    : 'Electron 自动后端';
   const [confirmConfig, setConfirmConfig] = useState<ConfirmConfig>({
     isOpen: false,
     title: '',
@@ -231,7 +234,7 @@ const App: React.FC = () => {
         <div className="bg-red-50 border-b border-red-200 px-6 py-2 flex items-center justify-between text-sm text-red-700">
             <div className="flex items-center gap-2">
                 <AlertCircle size={16} />
-                <span>无法连接到后端服务 ({settings.backendUrl === '/api' ? '代理到 5001 端口' : settings.backendUrl})。请确保 Python 服务正在运行。</span>
+                <span>无法连接到后端服务（{backendLabel}）。请确认 Electron 内置后端已启动，或在设置中填写可访问的后端地址。</span>
             </div>
             <button onClick={checkHealth} className="flex items-center gap-1 hover:underline font-medium">
                 <RefreshCw size={14} /> 重试

@@ -138,6 +138,8 @@ function createApplicationMenu(): void {
 }
 
 function createWindow(): void {
+  const appRoot = isDev ? process.cwd() : app.getAppPath();
+
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
@@ -146,7 +148,7 @@ function createWindow(): void {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      preload: path.join(app.getAppPath(), 'electron/preload.js'),
+      preload: path.join(appRoot, 'electron/preload.js'),
     },
     titleBarStyle: 'default',
     show: false,

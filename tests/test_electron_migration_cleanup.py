@@ -19,13 +19,25 @@ class ElectronMigrationCleanupTest(unittest.TestCase):
         self.assertIn("mainWindow.loadURL('http://localhost:3000')", main)
         self.assertNotIn("localhost:3001", main)
 
+    def test_electron_dev_preload_uses_project_root(self):
+        main = read("electron/main.ts")
+
+        self.assertIn("const appRoot = isDev ? process.cwd() : app.getAppPath()", main)
+        self.assertIn("preload: path.join(appRoot, 'electron/preload.js')", main)
+        self.assertNotIn("preload: path.join(app.getAppPath(), 'electron/preload.js')", main)
+
     def test_settings_default_uses_electron_managed_backend(self):
         settings_modal = read("components/SettingsModal.tsx")
         api_service = read("services/apiService.ts")
+        app = read("App.tsx")
 
         self.assertNotIn("backendUrl: '/api'", settings_modal)
         self.assertNotIn("python backend/server.py", settings_modal)
+        self.assertNotIn("请确保 Python 服务正在运行", app)
+        self.assertNotIn("{settings.backendUrl", app)
         self.assertIn("settings.backendUrl !== '/api'", api_service)
+        self.assertIn("return `http://127.0.0.1:${port}`", api_service)
+        self.assertNotIn("return `http://localhost:${port}`", api_service)
         self.assertIn("window.electron?.getPythonPort", api_service)
 
     def test_convert_audio_uses_backend_format_field(self):
@@ -51,6 +63,9 @@ class ElectronMigrationCleanupTest(unittest.TestCase):
 
         self.assertNotIn("flask-cors", requirements)
         self.assertNotIn("make_response", backend)
+        self.assertIn("@app.after_request", backend)
+        self.assertIn("Access-Control-Allow-Origin", backend)
+        self.assertIn("Access-Control-Allow-Headers", backend)
 
     def test_linux_package_does_not_require_system_backend_runtime(self):
         builder = read("electron-builder.yml")
