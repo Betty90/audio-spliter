@@ -343,7 +343,7 @@ const App: React.FC = () => {
                             <h3 className="text-xl font-semibold text-slate-600 mb-2">拖拽音频文件到此处</h3>
                             <p className="max-w-md text-center text-sm">
                                 支持 .mp3, .wav, .m4a, .mp4 等格式<br/>
-                                请确保后端服务 <code>python backend/server.py</code> 正在运行
+                                Electron 会自动启动内置 Python 后端
                             </p>
                         </div>
                     )}

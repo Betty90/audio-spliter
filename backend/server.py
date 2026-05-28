@@ -8,10 +8,7 @@ import argparse
 import signal
 import sys
 
-from flask import Flask, request, jsonify, make_response, send_file
-
-# Remove flask_cors dependency usage to ensure manual control over headers
-# from flask_cors import CORS
+from flask import Flask, request, jsonify, send_file
 import librosa
 import numpy as np
 from sklearn.cluster import KMeans

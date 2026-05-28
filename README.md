@@ -76,15 +76,19 @@ cd audio-spliter
 npm install
 ```
 
-3. 启动开发服务器
+3. 启动 Electron 开发应用
 ```bash
 npm run dev
 ```
 
-这将同时启动前端开发服务器（Vite）和后端 API 服务器（Flask）。
+这会构建 Electron 主进程，启动 Vite 开发服务器，并由 Electron 自动拉起 Python 后端。
 
-4. 访问应用
-开发模式下打开浏览器访问 http://localhost:3001
+4. 可选：浏览器调试模式
+```bash
+npm run web:dev
+```
+
+浏览器调试模式会同时启动固定 `5001` 端口的 Flask 后端和 `3000` 端口的 Vite 服务，可访问 http://localhost:3000。
 
 ### 构建桌面应用
 
@@ -178,9 +182,11 @@ audio-spliter/
 
 | 命令 | 说明 |
 |------|------|
-| `npm run dev` | 启动开发模式（前端 + Python后端） |
+| `npm run dev` | 启动 Electron 开发模式（Vite + Electron + 自动 Python 后端） |
+| `npm run web:dev` | 启动浏览器调试模式（固定 5001 端口 Flask 后端 + Vite） |
 | `npm run build` | 构建前端生产版本 |
 | `npm run electron:build` | 构建 Electron 主进程 |
+| `npm run electron:dev` | 直接启动 Electron 开发应用 |
 | `npm run build:python` | 构建 Python 后端（PyInstaller） |
 | `npm run electron:pack:mac` | 打包 macOS 应用 |
 | `npm run electron:pack:win` | 打包 Windows 应用 |

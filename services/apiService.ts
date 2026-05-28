@@ -40,7 +40,11 @@ async function getPythonPort(): Promise<number> {
 }
 
 async function getApiBaseUrl(settings?: AppSettings): Promise<string> {
-  if (settings?.backendUrl) {
+  if (
+    settings?.backendUrl &&
+    settings.backendUrl !== 'auto' &&
+    settings.backendUrl !== '/api'
+  ) {
     return settings.backendUrl.replace(/\/$/, '');
   }
 
@@ -53,8 +57,6 @@ async function getApiBaseUrl(settings?: AppSettings): Promise<string> {
     }
   }
 
-  // In Electron packaged app, window.location uses file:// protocol
-  // which won't work for API calls. Always use localhost.
   return 'http://localhost:5001';
 }
 
@@ -102,7 +104,7 @@ export const analyzeAudio = async (
         ? "\n⚠️ 您正在使用 HTTPS 访问网页，但后端是 HTTP。浏览器可能拦截了请求 (Mixed Content)。请检查地址栏拦截图标。"
         : "";
 
-    throw new Error(`无法连接到后端服务 (${backendUrl})。${mixedContentWarning}\n\n请确保:\n1. 'python backend/server.py' 正在运行\n2. 端口 ${port} 未被占用`);
+    throw new Error(`无法连接到后端服务 (${backendUrl})。${mixedContentWarning}\n\n请确保:\n1. Electron 管理的 Python 后端已启动\n2. 端口 ${port} 未被占用`);
   }
 
   if (!response.ok) {
@@ -207,7 +209,7 @@ export const convertAudio = async (
 ): Promise<Blob> => {
   const formData = new FormData();
   formData.append('file', file);
-  formData.append('output_format', outputFormat);
+  formData.append('target_format', outputFormat);
 
   const backendUrl = await getApiBaseUrl(settings);
 

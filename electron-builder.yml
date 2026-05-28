@@ -97,10 +97,6 @@ linux:
 # DEB specific
 deb:
   priority: optional
-  depends:
-    - python3
-    - python3-pip
-    - ffmpeg
 # Publish Configuration (GitHub Releases)
 publish:
   provider: github
@@ -112,5 +108,3 @@ compression: maximum
 asar: true
 asarUnpack:
   - "**/*.node"
-  - "backend/**/*"
-  - "python-dist/**/*"

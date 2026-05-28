@@ -51,13 +51,16 @@ audio-spliter/
 
 - 安装 Node 依赖：`npm install`
 - 本地运行后端或后端测试前安装 Python 依赖：`python3 -m pip install -r backend/requirements.txt`
-- 启动 Web 开发模式：`npm run dev`
-  - Flask 后端运行在 `5001` 端口，Vite 运行在 `3000` 端口。
+- 启动 Electron 开发模式：`npm run dev`
+  - 等同于 `npm run electron:dev`，由 Electron 自动拉起 Python 后端。
+  - Vite 运行在 `3000` 端口，Electron 开发窗口加载 `http://localhost:3000`。
+- 启动浏览器调试模式：`npm run web:dev`
+  - Flask 后端运行在固定 `5001` 端口，Vite 运行在 `3000` 端口。
   - Vite 会把 `/api` 和 `/convert` 代理到 `http://127.0.0.1:5001`。
 - 检查渲染进程类型：`npm run lint`
 - 构建渲染进程：`npm run build`
 - 构建 Electron 主进程：`npm run electron:build`
-- 启动 Electron 开发应用：`npm run electron:dev`
+- 直接启动 Electron 开发应用：`npm run electron:dev`
 - 打包当前平台应用：`npm run electron:pack`
 - 打包 macOS 应用：`npm run electron:pack:mac`
 - 完整构建和打包流程：`npm run build:all`

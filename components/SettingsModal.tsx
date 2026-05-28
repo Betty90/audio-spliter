@@ -67,13 +67,13 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, settings
                     type="text"
                     value={formData.backendUrl}
                     onChange={(e) => setFormData({ ...formData, backendUrl: e.target.value })}
-                    placeholder="http://127.0.0.1:5001"
+                    placeholder="自动使用 Electron 管理的后端"
                     className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-sm font-mono"
                 />
             </div>
             <div className="flex gap-2 text-xs text-gray-500">
                 <span className="text-gray-400">快速设置:</span>
-                <button onClick={() => setFormData({ ...formData, backendUrl: '/api' })} className="hover:text-blue-600 underline font-medium text-blue-600">默认 (推荐)</button>
+                <button onClick={() => setFormData({ ...formData, backendUrl: '' })} className="hover:text-blue-600 underline font-medium text-blue-600">自动 (推荐)</button>
                 <span className="text-gray-300">|</span>
                 <button onClick={() => setLocalhost('ip')} className="hover:text-blue-600 underline">127.0.0.1</button>
                 <span className="text-gray-300">|</span>
@@ -201,9 +201,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, settings
                 连接问题排查:
             </p>
             <ul className="list-disc pl-4 space-y-0.5">
-                <li>确保 Python 服务正在运行: <code>python backend/server.py</code></li>
-                <li>如果网页是 HTTPS，浏览器可能会拦截 HTTP 请求 (Mixed Content)。请尝试点击浏览器地址栏的"不安全"图标允许。</li>
-                <li>尝试切换 127.0.0.1 或 localhost。</li>
+                <li>Electron 模式下默认会自动使用内置 Python 后端。</li>
+                <li>浏览器调试模式下，可手动填写 127.0.0.1 或 localhost 地址。</li>
             </ul>
           </div>
         </div>

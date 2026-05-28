@@ -94,7 +94,8 @@ function cleanBuildDirs() {
     'dist',
     'electron/dist',
     'release',
-    'python-dist',
+    'py-dist',
+    'py-build',
   ];
 
   for (const dir of dirsToClean) {
@@ -111,7 +112,7 @@ function cleanBuildDirs() {
 function ensureDirs() {
   const dirs = [
     'electron/dist',
-    'python-dist',
+    'py-dist',
     'release',
   ];
 

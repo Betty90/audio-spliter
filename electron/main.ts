@@ -153,7 +153,7 @@ function createWindow(): void {
   });
 
   if (isDev) {
-    mainWindow.loadURL('http://localhost:3001');
+    mainWindow.loadURL('http://localhost:3000');
   } else {
     // In packaged app, use app.getAppPath() to get the correct path to app.asar
     mainWindow.loadFile(path.join(app.getAppPath(), 'dist/index.html'));
