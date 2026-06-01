@@ -122,7 +122,7 @@ class RedesignInterfacesTest(unittest.TestCase):
     def test_settings_modal_uses_compact_desktop_typography(self):
         modal = read("components/SettingsModal.tsx")
 
-        self.assertIn("max-w-[520px]", modal)
+        self.assertIn("max-w-[560px]", modal)
         self.assertIn("text-[15px] font-semibold", modal)
         self.assertIn("text-[12px] font-semibold", modal)
         self.assertIn("h-8 w-full", modal)
@@ -147,11 +147,18 @@ class RedesignInterfacesTest(unittest.TestCase):
 
         self.assertIn("mode: AnalysisRowMode", table)
         self.assertIn("onModeChange: (mode: AnalysisRowMode) => void", table)
+        self.assertIn("directionKey(row)", table)
+        self.assertIn("directionOptions", table)
+        self.assertIn("onModeChange(option.key)", table)
         self.assertNotIn("Search", table)
         self.assertNotIn("Filter", table)
         self.assertNotIn("Settings2", table)
         self.assertNotIn("placeholder=\"搜索片段或文件\"", table)
         self.assertNotIn(">筛选<", table)
+        self.assertNotIn("'odd'", table)
+        self.assertNotIn("'even'", table)
+        self.assertNotIn("奇数", table)
+        self.assertNotIn("偶数", table)
         self.assertNotIn(">录音文件<", table)
         self.assertNotIn(">平均值<", table)
         self.assertIn(">备注<", table)
@@ -241,6 +248,11 @@ class RedesignInterfacesTest(unittest.TestCase):
         self.assertIn("px-2.5 py-2.5", table)
         self.assertIn('w-[180px] px-2.5 py-2.5">片段间隔', table)
         self.assertIn('w-[80px] px-2.5 py-2.5">备注', table)
+        self.assertIn("latencyExtremes", table)
+        self.assertIn("isBestLatency", table)
+        self.assertIn("isWorstLatency", table)
+        self.assertIn("text-emerald-700", table)
+        self.assertIn("text-amber-900", table)
 
     def test_analysis_segment_remarks_live_update_table_rows(self):
         app = read("App.tsx")
@@ -260,6 +272,49 @@ class RedesignInterfacesTest(unittest.TestCase):
         self.assertIn("segments.forEach((seg)", waveform)
         self.assertIn("if (!isReady || !regionsRef.current) return", waveform)
         self.assertIn("syncRegionsFromSegments(localSegments)", waveform)
+
+    def test_waveform_sidebar_compacts_controls_and_segment_rows(self):
+        waveform = read("components/WaveformSidebar.tsx")
+
+        self.assertNotIn("个片段 ·", waveform)
+        self.assertIn("justify-between gap-2", waveform)
+        self.assertIn("flex flex-1 items-center gap-1.5", waveform)
+        self.assertIn("className=\"tool-button h-8 flex-1", waveform)
+        self.assertNotIn("sticky top-0", waveform)
+        self.assertIn("rounded-lg border px-2.5 py-1.5", waveform)
+        self.assertIn("seg.start.toFixed(2)}s - {seg.end.toFixed(2)}s", waveform)
+        self.assertIn("(seg.end - seg.start).toFixed(2)}s", waveform)
+        self.assertIn("w-[82px]", waveform)
+        self.assertIn("displaySidebarSpeakerName", waveform)
+        self.assertIn("displaySidebarSpeakerHint", waveform)
+        self.assertIn("speakerLabels[speaker]?.trim() || speaker", waveform)
+        self.assertIn("speakerLabels[normalizedSpeaker]?.trim() ? normalizedSpeaker : ''", waveform)
+        self.assertIn("seg.remark || '添加备注'", waveform)
+
+    def test_speaker_label_mapping_drives_table_and_sidebar_display(self):
+        types = read("types.ts")
+        constants = read("constants.ts")
+        app = read("App.tsx")
+        table = read("components/AnalysisTable.tsx")
+        waveform = read("components/WaveformSidebar.tsx")
+        settings = read("components/SettingsModal.tsx")
+
+        self.assertIn("speakerLabels: Record<string, string>", types)
+        self.assertIn("speakerLabels: {", constants)
+        self.assertIn("'音色1': '客服'", constants)
+        self.assertIn("'音色2': '客户'", constants)
+        self.assertIn("speakerLabels={activeFile?.settings?.speakerLabels || settings.speakerLabels}", app)
+        self.assertIn("settings={activeFile?.settings || settings}", app)
+        self.assertIn("speakerLabels?: Record<string, string>", table)
+        self.assertIn("displaySpeakerLabel", table)
+        self.assertNotIn("fromLabel.secondary", table)
+        self.assertNotIn("toLabel.secondary", table)
+        self.assertNotIn("normalizeSpeakerKey(row.speakerFrom)", table)
+        self.assertNotIn("normalizeSpeakerKey(row.speakerTo)", table)
+        self.assertIn("speakerOptions", waveform)
+        self.assertIn("<select", waveform)
+        self.assertIn("音色映射", settings)
+        self.assertIn("updateSpeakerLabel", settings)
 
 
 if __name__ == "__main__":

@@ -46,7 +46,7 @@ const EMPTY_OUTPUT_POLICY: OutputPolicy = {
 
 const ANALYSIS_CONTENT_WIDTH = 800;
 
-type AnalysisRowMode = 'all' | 'odd' | 'even';
+type AnalysisRowMode = string;
 
 function makeId(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
@@ -107,10 +107,19 @@ function buildLatencyRows(file: AudioFile | null): LatencyRow[] {
   });
 }
 
+function normalizeSpeakerKey(speaker: string): string {
+  const match = speaker.match(/音色\s*(\d+)/);
+  return match ? `音色${match[1]}` : speaker;
+}
+
+function directionKey(row: LatencyRow): string {
+  return `${normalizeSpeakerKey(row.speakerFrom)}->${normalizeSpeakerKey(row.speakerTo)}`;
+}
+
 function filterLatencyRowsByMode(rows: LatencyRow[], mode: AnalysisRowMode): LatencyRow[] {
-  if (mode === 'odd') return rows.filter((_, index) => index % 2 === 0);
-  if (mode === 'even') return rows.filter((_, index) => index % 2 !== 0);
-  return rows;
+  if (mode === 'all') return rows;
+  const matched = rows.filter(row => directionKey(row) === mode);
+  return matched.length ? matched : rows;
 }
 
 const App: React.FC = () => {
@@ -637,6 +646,7 @@ const App: React.FC = () => {
                     onModeChange={setAnalysisRowMode}
                     activeSegmentId={activeSegmentId}
                     onSegmentSelect={setActiveSegmentId}
+                    speakerLabels={activeFile?.settings?.speakerLabels || settings.speakerLabels}
                   />
                 )}
 
@@ -653,6 +663,7 @@ const App: React.FC = () => {
                 file={activeFile}
                 onUpdateSegments={handleSegmentUpdate}
                 onClose={() => setSelectedFileId(null)}
+                settings={activeFile?.settings || settings}
                 activeSegmentId={activeSegmentId}
                 onSegmentSelect={setActiveSegmentId}
                 onReanalyze={handleReanalyzeRequest}

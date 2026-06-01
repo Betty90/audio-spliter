@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { X, Save, Sliders, Users, RotateCcw } from 'lucide-react';
 import { AppSettings } from '../types';
 
+const DEFAULT_SPEAKER_LABELS = { '音色1': '客服', '音色2': '客户' };
+
 interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -12,7 +14,7 @@ interface SettingsModalProps {
 }
 
 const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, settings, onSave, title = "配置参数", onReset }) => {
-  const [formData, setFormData] = useState<AppSettings>(settings);
+  const [formData, setFormData] = useState<AppSettings>({ ...settings, speakerLabels: settings.speakerLabels || DEFAULT_SPEAKER_LABELS });
   const fieldClass = 'space-y-1.5';
   const labelClass = 'flex items-center gap-1.5 text-[12px] font-semibold leading-none text-slate-700';
   const controlClass = 'h-8 w-full rounded-md border border-slate-200 bg-white px-2.5 text-[12px] font-medium text-slate-800 outline-none transition-colors focus:border-[var(--psbc-green)] focus:ring-2 focus:ring-[var(--psbc-green-soft)]';
@@ -20,7 +22,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, settings
 
   useEffect(() => {
     if (isOpen) {
-      setFormData(settings);
+      setFormData({ ...settings, speakerLabels: settings.speakerLabels || DEFAULT_SPEAKER_LABELS });
     }
   }, [isOpen, settings]);
 
@@ -38,9 +40,21 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, settings
     }
   };
 
+  const speakerCount = Math.max(1, formData.numSpeakers || Object.keys(formData.speakerLabels || {}).length || 2);
+  const speakerKeys = Array.from({ length: speakerCount }, (_, index) => `音色${index + 1}`);
+  const updateSpeakerLabel = (speaker: string, label: string) => {
+    setFormData({
+      ...formData,
+      speakerLabels: {
+        ...(formData.speakerLabels || {}),
+        [speaker]: label,
+      },
+    });
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 backdrop-blur-sm">
-      <div className="w-full max-w-[520px] overflow-hidden rounded-lg border border-slate-200 bg-white shadow-2xl">
+      <div className="w-full max-w-[560px] overflow-hidden rounded-lg border border-slate-200 bg-white shadow-2xl">
         <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-4 py-3">
           <h2 className="flex items-center gap-2 text-[15px] font-semibold leading-none text-slate-900">
             <Sliders size={16} />
@@ -51,7 +65,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, settings
           </button>
         </div>
 
-        <div className="px-4 py-4">
+        <div className="max-h-[78vh] overflow-y-auto px-4 py-4">
           <div className="grid grid-cols-2 gap-x-4 gap-y-3.5">
             <div className={fieldClass}>
               <label className={labelClass}>
@@ -157,6 +171,27 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, settings
               </select>
               <p className={hintClass}>影响分析的频率范围和速度</p>
             </div>
+          </div>
+
+          <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50/70 p-3">
+            <div className="mb-2 flex items-center justify-between">
+              <label className={labelClass}>音色映射</label>
+              <span className="text-[10.5px] font-medium text-slate-500">表格优先显示映射名</span>
+            </div>
+            <div className="grid grid-cols-2 gap-2.5">
+              {speakerKeys.map((speaker) => (
+                <div key={speaker} className="flex items-center gap-2">
+                  <span className="w-12 shrink-0 text-[11px] font-semibold text-slate-500">{speaker}</span>
+                  <input
+                    value={formData.speakerLabels?.[speaker] || ''}
+                    onChange={(e) => updateSpeakerLabel(speaker, e.target.value)}
+                    className={controlClass}
+                    placeholder="映射名"
+                  />
+                </div>
+              ))}
+            </div>
+            <p className={`${hintClass} mt-2`}>默认音色1为客服，音色2为客户；文件专属配置可覆盖全局映射。</p>
           </div>
         </div>
 

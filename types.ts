@@ -125,6 +125,7 @@ export interface AppSettings {
   minSegmentDuration: number; // ignore blips smaller than this
   backendUrl: string;
   numSpeakers: number; // For K-Means clustering
+  speakerLabels: Record<string, string>; // Display name mapping, e.g. 音色1 -> 客服
   silenceThreshold: number; // RMS threshold for silence detection
   smoothingWidth: number; // Median filter kernel size (odd number)
   sampleRate: number; // Audio sample rate (16000, 22050, 44100)

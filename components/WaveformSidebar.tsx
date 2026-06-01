@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import WaveSurfer from 'wavesurfer.js';
 import RegionsPlugin from 'wavesurfer.js/dist/plugins/regions.js';
 import { Play, Pause, SkipBack, SkipForward, ZoomIn, ZoomOut, Scissors, Save, Trash2, Merge, RefreshCw, Settings, Download, Loader2, X } from 'lucide-react';
-import { AudioFile, AudioSegment } from '../types';
+import { AppSettings, AudioFile, AudioSegment } from '../types';
 import { SPEAKER_COLORS } from '../constants';
 import ConfirmDialog, { ConfirmConfig } from './ConfirmDialog';
 import { extractAudioSegment } from '../utils/audioUtils';
@@ -25,6 +25,7 @@ interface WaveformSidebarProps {
   file: AudioFile | null;
   onUpdateSegments: (fileId: string, segments: AudioSegment[]) => void;
   onClose: () => void;
+  settings?: AppSettings;
   activeSegmentId?: string | null;
   onSegmentSelect?: (id: string | null) => void;
   onReanalyze?: (fileId: string) => void;
@@ -32,7 +33,26 @@ interface WaveformSidebarProps {
   onOverlayChange?: (isOverlaying: boolean) => void;
 }
 
-const WaveformSidebar: React.FC<WaveformSidebarProps> = ({ file, onUpdateSegments, onClose, activeSegmentId, onSegmentSelect, onReanalyze, onOpenSettings, onOverlayChange }) => {
+function normalizeSpeakerKey(speaker: string): string {
+  const match = speaker.match(/音色\s*(\d+)/);
+  return match ? `音色${match[1]}` : speaker;
+}
+
+function speakerNumber(speaker: string): number {
+  const match = normalizeSpeakerKey(speaker).match(/音色(\d+)/);
+  return match ? Number(match[1]) : 1;
+}
+
+function displaySidebarSpeakerName(speaker: string, speakerLabels: Record<string, string>): string {
+  return speakerLabels[speaker]?.trim() || speaker;
+}
+
+function displaySidebarSpeakerHint(speaker: string, speakerLabels: Record<string, string>): string {
+  const normalizedSpeaker = normalizeSpeakerKey(speaker);
+  return speakerLabels[normalizedSpeaker]?.trim() ? normalizedSpeaker : '';
+}
+
+const WaveformSidebar: React.FC<WaveformSidebarProps> = ({ file, onUpdateSegments, onClose, settings, activeSegmentId, onSegmentSelect, onReanalyze, onOpenSettings, onOverlayChange }) => {
   const panelRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const wavesurferRef = useRef<WaveSurfer | null>(null);
@@ -163,17 +183,27 @@ const WaveformSidebar: React.FC<WaveformSidebarProps> = ({ file, onUpdateSegment
   const [lastSelectedId, setLastSelectedId] = useState<string | null>(null);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const lastNotifiedIdRef = useRef<string | null>(null);
+  const speakerCount = Math.max(
+    1,
+    settings?.numSpeakers || 0,
+    ...localSegments.map(segment => speakerNumber(segment.speaker)),
+    Object.keys(settings?.speakerLabels || {}).length || 0,
+    2,
+  );
+  const speakerOptions = Array.from({ length: speakerCount }, (_, index) => `音色${index + 1}`);
+  const speakerLabels = settings?.speakerLabels || {};
 
   const syncRegionsFromSegments = useCallback((segments: AudioSegment[]) => {
     if (!regionsRef.current) return;
     regionsRef.current.clearRegions();
     segments.forEach((seg) => {
-      const colorIndex = Math.abs(seg.speaker.length) % SPEAKER_COLORS.length;
+      const normalizedSpeaker = normalizeSpeakerKey(seg.speaker);
+      const colorIndex = (speakerNumber(normalizedSpeaker) - 1) % SPEAKER_COLORS.length;
       regionsRef.current!.addRegion({
         id: seg.id,
         start: seg.start,
         end: seg.end,
-        content: seg.speaker,
+        content: normalizedSpeaker,
         color: SPEAKER_COLORS[colorIndex],
         drag: true,
         resize: true,
@@ -379,10 +409,10 @@ const WaveformSidebar: React.FC<WaveformSidebarProps> = ({ file, onUpdateSegment
           id: `manual-${Date.now()}`,
           start: currentTime,
           end: end,
-          speaker: '新音色'
+          speaker: speakerOptions[0] || '音色1'
       };
       
-      const colorIndex = Math.abs(newSeg.speaker.length) % SPEAKER_COLORS.length;
+      const colorIndex = (speakerNumber(newSeg.speaker) - 1) % SPEAKER_COLORS.length;
       regionsRef.current.addRegion({
           id: newSeg.id,
           start: newSeg.start,
@@ -413,16 +443,18 @@ const WaveformSidebar: React.FC<WaveformSidebarProps> = ({ file, onUpdateSegment
       if (regionsRef.current) {
           const region = regionsRef.current.getRegions().find(r => r.id === segmentId);
           if (region) {
-              const colorIndex = Math.abs(newSpeaker.length) % SPEAKER_COLORS.length;
+              const normalizedSpeaker = normalizeSpeakerKey(newSpeaker);
+              const colorIndex = (speakerNumber(normalizedSpeaker) - 1) % SPEAKER_COLORS.length;
               region.setOptions({ 
-                  content: newSpeaker,
+                  content: normalizedSpeaker,
                   color: SPEAKER_COLORS[colorIndex]
               });
           }
       }
 
+      const normalizedSpeaker = normalizeSpeakerKey(newSpeaker);
       const nextSegments = localSegments.map(s =>
-          s.id === segmentId ? { ...s, speaker: newSpeaker } : s
+          s.id === segmentId ? { ...s, speaker: normalizedSpeaker } : s
       );
       setLocalSegments(nextSegments);
       if (file) onUpdateSegments(file.id, nextSegments);
@@ -655,14 +687,11 @@ const WaveformSidebar: React.FC<WaveformSidebarProps> = ({ file, onUpdateSegment
       />
 
       {/* Header - Fixed */}
-      <div className="z-20 flex shrink-0 items-start justify-between gap-3 border-b border-slate-200 bg-white px-4 py-4">
+      <div className="z-20 flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3">
         <div className="min-w-0">
           <h3 className="max-w-[210px] truncate text-base font-bold leading-tight text-slate-950" title={file.name}>
             {file.name}
           </h3>
-          <p className="mt-1 text-xs text-slate-500">
-            {isReady ? `${localSegments.length} 个片段 · ${duration.toFixed(1)}s` : '加载波形中...'}
-          </p>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
             {onOpenSettings && (
@@ -700,12 +729,12 @@ const WaveformSidebar: React.FC<WaveformSidebarProps> = ({ file, onUpdateSegment
       </div>
 
       {/* Player Section - Fixed/Sticky */}
-      <div className="z-10 shrink-0 space-y-3 border-b border-slate-200 bg-white p-3">
+      <div className="z-10 shrink-0 space-y-2 border-b border-slate-200 bg-white p-3">
          {/* Combined Controls Row */}
-         <div className="flex items-center justify-center gap-3">
+         <div className="flex items-center justify-between gap-2">
             
             {/* Playback Controls */}
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1.5">
                 <button onClick={() => skip(-10)} disabled={!isReady} className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-800 disabled:opacity-30" title="后退10秒"><SkipBack size={17} /></button>
                 <button onClick={() => skip(-1)} disabled={!isReady} className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-800 disabled:opacity-30" title="后退1秒"><span className="text-xs font-bold">-1</span></button>
                 
@@ -720,14 +749,13 @@ const WaveformSidebar: React.FC<WaveformSidebarProps> = ({ file, onUpdateSegment
                 <button onClick={() => skip(1)} disabled={!isReady} className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-800 disabled:opacity-30" title="快进1秒"><span className="text-xs font-bold">+1</span></button>
                 <button onClick={() => skip(10)} disabled={!isReady} className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-800 disabled:opacity-30" title="快进10秒"><SkipForward size={17} /></button>
             </div>
-        </div>
 
             {/* Tools */}
-            <div className="grid grid-cols-3 gap-2">
+            <div className="flex flex-1 items-center gap-1.5">
                 <button 
                     onClick={addRegionAtCurrentTime}
                     disabled={!isReady}
-                    className="tool-button h-8 px-2 text-xs disabled:cursor-not-allowed disabled:opacity-50"
+                    className="tool-button h-8 flex-1 px-2 text-xs disabled:cursor-not-allowed disabled:opacity-50"
                     title="添加片段"
                 >
                     <Scissors size={14} />
@@ -736,7 +764,7 @@ const WaveformSidebar: React.FC<WaveformSidebarProps> = ({ file, onUpdateSegment
                 <button 
                     onClick={handleMergeSegments}
                     disabled={!isReady || selectedSegments.size < 2}
-                    className="tool-button h-8 px-2 text-xs disabled:cursor-not-allowed disabled:opacity-50"
+                    className="tool-button h-8 flex-1 px-2 text-xs disabled:cursor-not-allowed disabled:opacity-50"
                     title="按住 Ctrl/Cmd 多选，Shift 连选"
                 >
                     <Merge size={14} />
@@ -746,7 +774,7 @@ const WaveformSidebar: React.FC<WaveformSidebarProps> = ({ file, onUpdateSegment
                 <button 
                     onClick={handleDeleteSelected}
                     disabled={!isReady || selectedSegments.size === 0}
-                    className="tool-button h-8 px-2 text-xs text-red-600 hover:border-red-300 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="tool-button h-8 flex-1 px-2 text-xs text-red-600 hover:border-red-300 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
                     title="删除选中片段"
                 >
                     <Trash2 size={14} />
@@ -754,6 +782,7 @@ const WaveformSidebar: React.FC<WaveformSidebarProps> = ({ file, onUpdateSegment
                     {selectedSegments.size > 0 && <span>({selectedSegments.size})</span>}
                 </button>
             </div>
+        </div>
 
         {/* Waveform Container */}
         <div className="group relative rounded-lg border border-slate-200 bg-white p-2 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
@@ -788,8 +817,8 @@ const WaveformSidebar: React.FC<WaveformSidebarProps> = ({ file, onUpdateSegment
       </div>
 
       {/* Segment List (Scrollable) */}
-      <div className="min-h-0 flex-1 space-y-2 overflow-y-auto bg-slate-50/60 p-3">
-            <h4 className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-100 bg-slate-50/95 py-2 text-xs font-bold text-slate-700 backdrop-blur">
+      <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto bg-slate-50/60 p-2.5">
+            <h4 className="flex items-center justify-between border-b border-slate-100 px-1 pb-1.5 text-xs font-bold text-slate-700">
                 片段列表
                 <span className="text-xs font-normal normal-case text-slate-400">
                     {localSegments.length} 个
@@ -800,13 +829,13 @@ const WaveformSidebar: React.FC<WaveformSidebarProps> = ({ file, onUpdateSegment
                     key={seg.id}
                     id={`segment-item-${seg.id}`}
                     onClick={(e) => handleSegmentClick(seg.id, e)}
-                    className={`group flex cursor-pointer scroll-mt-10 items-center gap-3 rounded-lg border p-2.5 text-sm transition-all hover:shadow-sm
+                    className={`group flex cursor-pointer scroll-mt-10 items-center gap-2 rounded-lg border px-2.5 py-1.5 text-sm shadow-[0_1px_1px_rgba(15,23,42,0.03)] transition-all hover:-translate-y-px hover:shadow-sm
                         ${selectedSegments.has(seg.id) || activeSegmentId === seg.id
                             ? 'border-[var(--psbc-green)] bg-[var(--psbc-green-soft)] ring-1 ring-[var(--psbc-green-line)]' 
                             : 'border-slate-100 bg-white hover:border-slate-200'}`}
                 >
                     {/* Index Number */}
-                    <div className={`flex items-center justify-center w-6 h-6 rounded-full text-xs font-mono font-medium shrink-0 transition-colors
+                    <div className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-xs font-mono font-semibold transition-colors
                         ${selectedSegments.has(seg.id) || activeSegmentId === seg.id
                             ? 'bg-[var(--psbc-green)] text-white' 
                             : 'bg-slate-100 text-slate-500 group-hover:bg-slate-200'}`}
@@ -814,30 +843,38 @@ const WaveformSidebar: React.FC<WaveformSidebarProps> = ({ file, onUpdateSegment
                         {idx + 1}
                     </div>
 
-                    <div className="flex flex-col flex-1 min-w-0 mr-2">
-                        <input 
-                            value={seg.speaker}
+                    <div className="flex min-w-0 flex-1 items-center gap-2">
+                          <select
+                            value={normalizeSpeakerKey(seg.speaker)}
                             onChange={(e) => handleSpeakerChange(seg.id, e.target.value)}
                             onClick={(e) => e.stopPropagation()}
                             onFocus={() => handleSegmentFocus(seg.id)}
-                            className="font-medium text-slate-800 bg-transparent border-none p-0 focus:ring-0 w-full truncate hover:bg-slate-100 rounded px-1 -ml-1 transition-colors"
-                            placeholder="说话人"
-                        />
+                            className="h-6 w-[82px] shrink-0 rounded-md border border-transparent bg-transparent px-1 py-0 text-[12px] font-semibold text-slate-800 outline-none transition-colors hover:bg-slate-100 focus:border-[var(--psbc-green-line)] focus:bg-white focus:ring-1 focus:ring-[var(--psbc-green-soft)]"
+                            title={displaySidebarSpeakerName(normalizeSpeakerKey(seg.speaker), speakerLabels)}
+                          >
+                            {speakerOptions.map((speaker) => (
+                              <option key={speaker} value={speaker}>
+                                {displaySidebarSpeakerName(speaker, speakerLabels)}
+                              </option>
+                            ))}
+                          </select>
+                          {displaySidebarSpeakerHint(seg.speaker, speakerLabels) && (
+                            <span className="shrink-0 text-[11px] font-medium text-slate-400">
+                              {displaySidebarSpeakerHint(seg.speaker, speakerLabels)}
+                            </span>
+                          )}
                         <input 
                             value={seg.remark || ''}
                             onChange={(e) => handleRemarkChange(seg.id, e.target.value)}
                             onClick={(e) => e.stopPropagation()}
                             onFocus={() => handleSegmentFocus(seg.id)}
-                            className="text-xs text-slate-500 bg-transparent border-none p-0 focus:ring-0 w-full truncate hover:bg-slate-100 rounded px-1 -ml-1 transition-colors mt-0.5"
-                            placeholder="添加备注..."
+                            className="min-w-0 flex-1 truncate rounded border-none bg-transparent px-1 py-0 text-xs text-slate-500 transition-colors hover:bg-slate-100 focus:ring-0"
+                            placeholder={seg.remark || '添加备注'}
                         />
-                        <span className="text-xs text-slate-400 font-mono mt-0.5 block">
-                            {seg.start.toFixed(2)}s - {seg.end.toFixed(2)}s
-                        </span>
                     </div>
-                    <div className="flex flex-col items-end gap-1">
-                        <span className="text-xs font-bold text-slate-400">
-                            {(seg.end - seg.start).toFixed(2)}s
+                    <div className="flex shrink-0 flex-col items-end gap-1">
+                        <span className="whitespace-nowrap text-[11px] font-mono font-semibold text-slate-400">
+                            {seg.start.toFixed(2)}s - {seg.end.toFixed(2)}s · {(seg.end - seg.start).toFixed(2)}s
                         </span>
                         <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-all">
                             <button 

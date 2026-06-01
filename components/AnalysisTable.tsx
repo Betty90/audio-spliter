@@ -3,7 +3,7 @@ import { ArrowRight, Copy, FileDown, FileJson, Table as TableIcon } from 'lucide
 import { AudioFile, LatencyRow } from '../types';
 import { formatTime } from '../utils/timeUtils';
 
-type AnalysisRowMode = 'all' | 'odd' | 'even';
+type AnalysisRowMode = string;
 
 interface AnalysisTableProps {
   files: AudioFile[];
@@ -11,15 +11,32 @@ interface AnalysisTableProps {
   onModeChange: (mode: AnalysisRowMode) => void;
   activeSegmentId?: string | null;
   onSegmentSelect?: (id: string | null) => void;
+  speakerLabels?: Record<string, string>;
+}
+
+function normalizeSpeakerKey(speaker: string): string {
+  const match = speaker.match(/音色\s*(\d+)/);
+  return match ? `音色${match[1]}` : speaker;
+}
+
+function displaySpeakerLabel(speaker: string, speakerLabels: Record<string, string> = {}): string {
+  const normalized = normalizeSpeakerKey(speaker);
+  const mapped = speakerLabels[normalized]?.trim();
+  return mapped || normalized;
+}
+
+function directionKey(row: LatencyRow): string {
+  const { speakerFrom, speakerTo } = row;
+  return `${normalizeSpeakerKey(speakerFrom)}->${normalizeSpeakerKey(speakerTo)}`;
 }
 
 function filterRowsByMode(rows: LatencyRow[], mode: AnalysisRowMode): LatencyRow[] {
-  if (mode === 'odd') return rows.filter((_, index) => index % 2 === 0);
-  if (mode === 'even') return rows.filter((_, index) => index % 2 !== 0);
-  return rows;
+  if (mode === 'all') return rows;
+  const matched = rows.filter(row => directionKey(row) === mode);
+  return matched.length ? matched : rows;
 }
 
-const AnalysisTable: React.FC<AnalysisTableProps> = ({ files, mode, onModeChange, activeSegmentId, onSegmentSelect }) => {
+const AnalysisTable: React.FC<AnalysisTableProps> = ({ files, mode, onModeChange, activeSegmentId, onSegmentSelect, speakerLabels = {} }) => {
   const [copiedFormat, setCopiedFormat] = useState<'markdown' | 'tsv' | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [lastInteractedId, setLastInteractedId] = useState<string | null>(null);
@@ -117,6 +134,30 @@ const AnalysisTable: React.FC<AnalysisTableProps> = ({ files, mode, onModeChange
     return filterRowsByMode(dataRows, mode);
   }, [dataRows, mode]);
 
+  const latencyExtremes = useMemo(() => {
+    const finiteLatencies = displayedRows
+      .map(row => row.latency)
+      .filter(value => Number.isFinite(value));
+    return {
+      best: finiteLatencies.length ? Math.min(...finiteLatencies) : null,
+      worst: finiteLatencies.length ? Math.max(...finiteLatencies) : null,
+    };
+  }, [displayedRows]);
+
+  const directionOptions = useMemo(() => {
+    const seen = new Set<string>();
+    return dataRows.reduce<Array<{ key: string; label: string }>>((options, row) => {
+      const key = directionKey(row);
+      if (seen.has(key)) return options;
+      seen.add(key);
+      options.push({
+        key,
+        label: `${displaySpeakerLabel(row.speakerFrom, speakerLabels)} → ${displaySpeakerLabel(row.speakerTo, speakerLabels)}`,
+      });
+      return options;
+    }, [{ key: 'all', label: '全部' }]);
+  }, [dataRows, speakerLabels]);
+
   const copyToClipboard = (format: 'markdown' | 'tsv') => {
     let text = '';
     
@@ -127,12 +168,16 @@ const AnalysisTable: React.FC<AnalysisTableProps> = ({ files, mode, onModeChange
     if (format === 'markdown') {
         text = `| 片段间隔 | 片段1结束 | 片段2开始 | 响应时延 | 备注 |\n|---|---|---|---|---|\n`;
         rowsToProcess.forEach(row => {
-             text += `| ${row.segment1Index} ${row.speakerFrom} -> ${row.segment2Index} ${row.speakerTo} | ${row.segment1End.toFixed(2)} | ${row.segment2Start.toFixed(2)} | ${row.latency.toFixed(2)} | ${row.remark || '-'} |\n`;
+             const from = displaySpeakerLabel(row.speakerFrom, speakerLabels);
+             const to = displaySpeakerLabel(row.speakerTo, speakerLabels);
+             text += `| ${row.segment1Index} ${from} -> ${row.segment2Index} ${to} | ${row.segment1End.toFixed(2)} | ${row.segment2Start.toFixed(2)} | ${row.latency.toFixed(2)} | ${row.remark || '-'} |\n`;
         });
     } else {
         text = `片段间隔\t片段1结束\t片段2开始\t响应时延\t备注\n`;
         rowsToProcess.forEach(row => {
-             text += `${row.segment1Index} ${row.speakerFrom} -> ${row.segment2Index} ${row.speakerTo}\t${row.segment1End.toFixed(2)}\t${row.segment2Start.toFixed(2)}\t${row.latency.toFixed(2)}\t${row.remark || '-'}\n`;
+             const from = displaySpeakerLabel(row.speakerFrom, speakerLabels);
+             const to = displaySpeakerLabel(row.speakerTo, speakerLabels);
+             text += `${row.segment1Index} ${from} -> ${row.segment2Index} ${to}\t${row.segment1End.toFixed(2)}\t${row.segment2Start.toFixed(2)}\t${row.latency.toFixed(2)}\t${row.remark || '-'}\n`;
         });
     }
 
@@ -191,21 +236,21 @@ const AnalysisTable: React.FC<AnalysisTableProps> = ({ files, mode, onModeChange
       <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3">
         <div className="flex min-w-0 items-center gap-3">
             <div className="flex items-center rounded-lg border border-slate-200 bg-slate-50 p-1 shadow-sm">
-                {(['all', 'odd', 'even'] as const).map(item => (
+                {directionOptions.map(option => (
                   <button
-                    key={item}
+                    key={option.key}
                     onClick={() => {
                       setSelectedIds(new Set());
-                      onModeChange(item);
+                      onModeChange(option.key);
                     }}
                     className={`rounded-md px-3 py-1.5 text-xs font-bold ${
-                      mode === item
+                      mode === option.key
                         ? 'bg-[var(--psbc-green-soft)] text-[var(--psbc-green)]'
                         : 'text-slate-600 hover:bg-slate-100'
                     }`}
-                    title={item === 'all' ? '显示全部响应行' : item === 'odd' ? '显示奇数响应行' : '显示偶数响应行'}
+                    title={option.key === 'all' ? '显示全部响应行' : `只显示 ${option.label}`}
                   >
-                    {item === 'all' ? '全部' : item === 'odd' ? '奇数' : '偶数'}
+                    {option.label}
                   </button>
                 ))}
             </div>
@@ -249,9 +294,19 @@ const AnalysisTable: React.FC<AnalysisTableProps> = ({ files, mode, onModeChange
             </thead>
             <tbody className="divide-y divide-slate-100">
                 {displayedRows.map((row, idx) => {
-                    const latencyClass = row.latency > 3.0 ? 'text-red-600 font-medium' : 'text-gray-600';
+                    const isBestLatency = latencyExtremes.best !== null && row.latency === latencyExtremes.best;
+                    const isWorstLatency = latencyExtremes.worst !== null && row.latency === latencyExtremes.worst && latencyExtremes.worst !== latencyExtremes.best;
+                    const latencyClass = isBestLatency
+                        ? 'text-emerald-700 font-bold'
+                        : isWorstLatency
+                            ? 'text-amber-900 font-bold'
+                            : row.latency > 3.0
+                                ? 'text-red-600 font-medium'
+                                : 'text-gray-600';
                     const isSelected = selectedIds.has(row.segment1Id);
                     const isActive = row.segment1Id === activeSegmentId;
+                    const fromLabel = displaySpeakerLabel(row.speakerFrom, speakerLabels);
+                    const toLabel = displaySpeakerLabel(row.speakerTo, speakerLabels);
 
                     return (
                         <tr 
@@ -271,12 +326,16 @@ const AnalysisTable: React.FC<AnalysisTableProps> = ({ files, mode, onModeChange
                                         <span className={`flex h-5 min-w-5 shrink-0 items-center justify-center rounded-md px-1 text-[11px] font-bold ${isSelected ? 'bg-[var(--psbc-green)] text-white' : 'bg-slate-100 text-slate-600'}`}>
                                             {row.segment1Index}
                                         </span>
-                                        <span className="min-w-0 truncate">{row.speakerFrom}</span>
+                                        <span className="min-w-0 truncate">
+                                            {fromLabel}
+                                        </span>
                                         <ArrowRight size={12} className="shrink-0 text-slate-400" />
                                         <span className={`flex h-5 min-w-5 shrink-0 items-center justify-center rounded-md px-1 text-[11px] font-bold ${isSelected ? 'bg-[var(--psbc-green)] text-white' : 'bg-slate-100 text-slate-600'}`}>
                                             {row.segment2Index}
                                         </span>
-                                        <span className="min-w-0 truncate">{row.speakerTo}</span>
+                                        <span className="min-w-0 truncate">
+                                            {toLabel}
+                                        </span>
 	                                </div>
 	                            </td>
 	                            <td className="px-2.5 py-2.5 font-mono text-slate-700">
