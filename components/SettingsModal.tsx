@@ -13,6 +13,10 @@ interface SettingsModalProps {
 
 const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, settings, onSave, title = "配置参数", onReset }) => {
   const [formData, setFormData] = useState<AppSettings>(settings);
+  const fieldClass = 'space-y-1.5';
+  const labelClass = 'flex items-center gap-1.5 text-[12px] font-semibold leading-none text-slate-700';
+  const controlClass = 'h-8 w-full rounded-md border border-slate-200 bg-white px-2.5 text-[12px] font-medium text-slate-800 outline-none transition-colors focus:border-[var(--psbc-green)] focus:ring-2 focus:ring-[var(--psbc-green-soft)]';
+  const hintClass = 'text-[10.5px] leading-snug text-slate-500';
 
   useEffect(() => {
     if (isOpen) {
@@ -35,47 +39,45 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, settings
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gray-50">
-          <h2 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
-            <Sliders size={18} />
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 backdrop-blur-sm">
+      <div className="w-full max-w-[520px] overflow-hidden rounded-lg border border-slate-200 bg-white shadow-2xl">
+        <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-4 py-3">
+          <h2 className="flex items-center gap-2 text-[15px] font-semibold leading-none text-slate-900">
+            <Sliders size={16} />
             {title}
           </h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
-            <X size={20} />
+          <button onClick={onClose} className="icon-button h-7 w-7 text-slate-400 hover:text-slate-700" title="关闭">
+            <X size={16} />
           </button>
         </div>
 
-        <div className="p-6 space-y-6">
-          <div className="grid grid-cols-2 gap-4">
-            {/* Num Speakers */}
-            <div className="space-y-2">
-              <label className="block text-sm font-medium text-gray-700 flex items-center gap-2">
-                <Users size={14} />
+        <div className="px-4 py-4">
+          <div className="grid grid-cols-2 gap-x-4 gap-y-3.5">
+            <div className={fieldClass}>
+              <label className={labelClass}>
+                <Users size={13} />
                 预计人数 (音色数)
               </label>
               <div className="flex gap-2">
-                  <input
-                    type="number"
-                    min="0"
-                    max="10"
-                    value={formData.numSpeakers}
-                    onChange={(e) => setFormData({ ...formData, numSpeakers: parseInt(e.target.value) })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--psbc-green)] outline-none text-sm"
-                  />
-                  {formData.numSpeakers === 0 && (
-                      <span className="flex items-center px-3 bg-[var(--psbc-green-soft)] text-[var(--psbc-green)] rounded text-sm font-medium whitespace-nowrap">
-                          自动检测
-                      </span>
-                  )}
+                <input
+                  type="number"
+                  min="0"
+                  max="10"
+                  value={formData.numSpeakers}
+                  onChange={(e) => setFormData({ ...formData, numSpeakers: parseInt(e.target.value) })}
+                  className={controlClass}
+                />
+                {formData.numSpeakers === 0 && (
+                  <span className="flex h-8 shrink-0 items-center rounded-md bg-[var(--psbc-green-soft)] px-2.5 text-[11px] font-semibold text-[var(--psbc-green)]">
+                    自动检测
+                  </span>
+                )}
               </div>
-              <p className="text-xs text-gray-500">设为 0 可自动检测人数 (2-5人)</p>
+              <p className={hintClass}>设为 0 可自动检测人数 (2-5人)</p>
             </div>
 
-            {/* Min Segment Duration */}
-            <div className="space-y-2">
-              <label className="block text-sm font-medium text-gray-700">
+            <div className={fieldClass}>
+              <label className={labelClass}>
                 最小片段时长 (秒)
               </label>
               <input
@@ -84,14 +86,13 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, settings
                 min="0.1"
                 value={formData.minSegmentDuration}
                 onChange={(e) => setFormData({ ...formData, minSegmentDuration: parseFloat(e.target.value) })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--psbc-green)] outline-none text-sm"
+                className={controlClass}
               />
-              <p className="text-xs text-gray-500">忽略短于此时长的片段</p>
+              <p className={hintClass}>忽略短于此时长的片段</p>
             </div>
 
-            {/* Silence Threshold */}
-            <div className="space-y-2">
-              <label className="block text-sm font-medium text-gray-700">
+            <div className={fieldClass}>
+              <label className={labelClass}>
                 静音阈值 (RMS)
               </label>
               <input
@@ -101,14 +102,13 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, settings
                 max="1.0"
                 value={formData.silenceThreshold || 0.005}
                 onChange={(e) => setFormData({ ...formData, silenceThreshold: parseFloat(e.target.value) })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--psbc-green)] outline-none text-sm"
+                className={controlClass}
               />
-              <p className="text-xs text-gray-500">能量低于此值视为静音 (默认 0.005)</p>
+              <p className={hintClass}>能量低于此值视为静音 (默认 0.005)</p>
             </div>
 
-            {/* Min Silence Duration */}
-            <div className="space-y-2">
-              <label className="block text-sm font-medium text-gray-700">
+            <div className={fieldClass}>
+              <label className={labelClass}>
                 最小静音时长 (秒)
               </label>
               <input
@@ -117,14 +117,13 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, settings
                 min="0.0"
                 value={formData.minSilenceDuration !== undefined ? formData.minSilenceDuration : 0.5}
                 onChange={(e) => setFormData({ ...formData, minSilenceDuration: parseFloat(e.target.value) })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--psbc-green)] outline-none text-sm"
+                className={controlClass}
               />
-              <p className="text-xs text-gray-500">短于此时长的静音将被忽略 (视为连续语音)</p>
+              <p className={hintClass}>短于此时长的静音将被忽略 (视为连续语音)</p>
             </div>
 
-            {/* Smoothing Width */}
-            <div className="space-y-2">
-              <label className="block text-sm font-medium text-gray-700">
+            <div className={fieldClass}>
+              <label className={labelClass}>
                 平滑窗口大小 (Smoothing Width)
               </label>
               <input
@@ -135,41 +134,39 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, settings
                 value={formData.smoothingWidth || 5}
                 onChange={(e) => {
                     const val = parseInt(e.target.value);
-                    // Ensure odd number
                     setFormData({ ...formData, smoothingWidth: val % 2 === 0 ? val + 1 : val });
                 }}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--psbc-green)] outline-none text-sm"
+                className={controlClass}
               />
-              <p className="text-xs text-gray-500">中值滤波窗口大小 (奇数)，越大越平滑</p>
+              <p className={hintClass}>中值滤波窗口大小 (奇数)，越大越平滑</p>
             </div>
 
-            {/* Sample Rate */}
-            <div className="space-y-2">
-              <label className="block text-sm font-medium text-gray-700">
+            <div className={fieldClass}>
+              <label className={labelClass}>
                 采样率 (Sample Rate)
               </label>
               <select
                 value={formData.sampleRate || 16000}
                 onChange={(e) => setFormData({ ...formData, sampleRate: parseInt(e.target.value) })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--psbc-green)] outline-none text-sm bg-white"
+                className={controlClass}
               >
                 <option value="8000">8000 Hz (电话音质)</option>
                 <option value="16000">16000 Hz (默认, 推荐)</option>
                 <option value="22050">22050 Hz (广播音质)</option>
                 <option value="44100">44100 Hz (CD 音质)</option>
               </select>
-              <p className="text-xs text-gray-500">影响分析的频率范围和速度</p>
+              <p className={hintClass}>影响分析的频率范围和速度</p>
             </div>
           </div>
         </div>
 
-        <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex justify-between">
+        <div className="flex items-center justify-between border-t border-slate-200 bg-slate-50 px-4 py-3">
           {onReset ? (
             <button
               onClick={handleReset}
-              className="px-4 py-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+              className="flex h-8 items-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 text-[12px] font-semibold text-slate-600 transition-colors hover:bg-slate-100"
             >
-              <RotateCcw size={16} />
+              <RotateCcw size={13} />
               恢复默认配置
             </button>
           ) : (
@@ -177,9 +174,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, settings
           )}
           <button
             onClick={handleSave}
-            className="px-4 py-2 bg-[var(--psbc-green)] hover:bg-[var(--psbc-green-dark)] text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+            className="flex h-8 items-center gap-1.5 rounded-md bg-[var(--psbc-green)] px-3.5 text-[12px] font-semibold text-white shadow-sm transition-colors hover:bg-[var(--psbc-green-dark)]"
           >
-            <Save size={16} />
+            <Save size={13} />
             保存设置
           </button>
         </div>

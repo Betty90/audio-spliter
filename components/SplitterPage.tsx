@@ -636,8 +636,14 @@ const SplitterPage: React.FC<SplitterPageProps> = ({ onBack }) => {
       {/* Header */}
       <div className="flex justify-between items-center rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm gap-4">
         <div className="min-w-0">
-          <h2 className="text-lg font-bold text-slate-900 leading-tight">音频分割</h2>
-          <p className="text-slate-500 text-sm">可视化波形编辑、拖拽选择片段并按声道导出</p>
+          <h2 className="text-lg font-bold text-slate-900 leading-tight">
+            {audioFile ? audioFile.name : '未选择音频'}
+          </h2>
+          <p className="text-slate-500 text-sm">
+            {audioFile
+              ? `${audioFile.name.split('.').pop()?.toUpperCase() || 'AUDIO'} · ${formatTime(duration)} · ${channelData.length || 1} 声道`
+              : '选择文件后显示波形、片段信息和导出工具'}
+          </p>
         </div>
         
         <div className="flex items-center gap-2">

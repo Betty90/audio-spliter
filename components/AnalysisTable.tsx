@@ -1,21 +1,30 @@
 import React, { useMemo, useState } from 'react';
-import { Copy, FileDown, Table as TableIcon, FileJson } from 'lucide-react';
+import { ArrowRight, Copy, FileDown, FileJson, Table as TableIcon } from 'lucide-react';
 import { AudioFile, LatencyRow } from '../types';
 import { formatTime } from '../utils/timeUtils';
 
+type AnalysisRowMode = 'all' | 'odd' | 'even';
+
 interface AnalysisTableProps {
   files: AudioFile[];
+  mode: AnalysisRowMode;
+  onModeChange: (mode: AnalysisRowMode) => void;
   activeSegmentId?: string | null;
   onSegmentSelect?: (id: string | null) => void;
 }
 
-const AnalysisTable: React.FC<AnalysisTableProps> = ({ files, activeSegmentId, onSegmentSelect }) => {
+function filterRowsByMode(rows: LatencyRow[], mode: AnalysisRowMode): LatencyRow[] {
+  if (mode === 'odd') return rows.filter((_, index) => index % 2 === 0);
+  if (mode === 'even') return rows.filter((_, index) => index % 2 !== 0);
+  return rows;
+}
+
+const AnalysisTable: React.FC<AnalysisTableProps> = ({ files, mode, onModeChange, activeSegmentId, onSegmentSelect }) => {
   const [copiedFormat, setCopiedFormat] = useState<'markdown' | 'tsv' | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [lastInteractedId, setLastInteractedId] = useState<string | null>(null);
   const tableRef = React.useRef<HTMLDivElement>(null);
 
-  // Sync selection with activeSegmentId from props
   React.useEffect(() => {
     if (activeSegmentId) {
         setSelectedIds(prev => {
@@ -28,7 +37,6 @@ const AnalysisTable: React.FC<AnalysisTableProps> = ({ files, activeSegmentId, o
     }
   }, [activeSegmentId]);
 
-  // Scroll to active row
   React.useEffect(() => {
     if (activeSegmentId && tableRef.current) {
         const row = tableRef.current.querySelector(`[data-segment-id*="${activeSegmentId}"]`);
@@ -60,7 +68,9 @@ const AnalysisTable: React.FC<AnalysisTableProps> = ({ files, activeSegmentId, o
           speakerTo: next.speaker,
           segment1Id: current.id,
           segment2Id: next.id,
-          remark: next.remark || ''
+          segment1Index: i + 1,
+          segment2Index: i + 2,
+          remark: current.remark || ''
         });
       }
     });
@@ -86,13 +96,6 @@ const AnalysisTable: React.FC<AnalysisTableProps> = ({ files, activeSegmentId, o
               const start = Math.min(lastIdx, currIdx);
               const end = Math.max(lastIdx, currIdx);
               
-              // If not holding Ctrl, clear previous selection? 
-              // Standard behavior usually keeps existing if Ctrl is held, but Shift usually extends from anchor.
-              // Let's assume Shift extends selection (clearing others if Ctrl not held is complex, let's just add range)
-              // Actually standard file explorer behavior: Shift+Click selects range from anchor to current, clearing others unless Ctrl is also held.
-              // Let's simplify: Shift adds range to current selection or replaces it?
-              // Let's replace for simplicity and consistency with "Single Select" base.
-              
               newSelected = new Set();
               for (let i = start; i <= end; i++) {
                   newSelected.add(dataRows[i].segment1Id);
@@ -105,103 +108,31 @@ const AnalysisTable: React.FC<AnalysisTableProps> = ({ files, activeSegmentId, o
 
       setSelectedIds(newSelected);
       
-      // Always notify parent of the clicked segment (to play/highlight in waveform)
       if (onSegmentSelect) {
           onSegmentSelect(id);
       }
   };
 
-  const selectedStats = useMemo(() => {
-      if (selectedIds.size === 0) return null;
-      
-      const selectedRows = dataRows.filter(r => selectedIds.has(r.segment1Id));
-      if (selectedRows.length === 0) return null;
-
-      const totalLatency = selectedRows.reduce((sum, r) => sum + r.latency, 0);
-      const avgLatency = totalLatency / selectedRows.length;
-
-      return {
-          count: selectedRows.length,
-          avg: avgLatency
-      };
-  }, [selectedIds, dataRows]);
-
-  const fileAverages = useMemo(() => {
-    const map = new Map<string, { total: number; count: number }>();
-    
-    // If selection exists, calculate averages based on selected rows per file
-    // Otherwise, calculate based on all rows per file
-    const rowsToProcess = selectedIds.size > 0 
-        ? dataRows.filter(r => selectedIds.has(r.segment1Id))
-        : dataRows;
-
-    rowsToProcess.forEach(row => {
-      const current = map.get(row.fileName) || { total: 0, count: 0 };
-      // 只计算正向时延? Usually we include all. The previous code had a check `if (row.latency > 0)`.
-      // Let's keep that check if it was intended to filter out negative latencies (overlaps).
-      if (row.latency > 0) {
-          current.total += row.latency;
-          current.count += 1;
-      }
-      map.set(row.fileName, current);
-    });
-    return map;
-  }, [dataRows, selectedIds]);
-
-  const handleSelectAll = () => {
-      setSelectedIds(new Set(dataRows.map(r => r.segment1Id)));
-  };
-
-  const handleSelectOdd = () => {
-      // 选中第 1, 3, 5... 行 (index 0, 2, 4...)
-      setSelectedIds(new Set(dataRows.filter((_, i) => i % 2 === 0).map(r => r.segment1Id)));
-  };
-
-  const handleSelectEven = () => {
-      // 选中第 2, 4, 6... 行 (index 1, 3, 5...)
-      setSelectedIds(new Set(dataRows.filter((_, i) => i % 2 !== 0).map(r => r.segment1Id)));
-  };
+  const displayedRows = useMemo(() => {
+    return filterRowsByMode(dataRows, mode);
+  }, [dataRows, mode]);
 
   const copyToClipboard = (format: 'markdown' | 'tsv') => {
     let text = '';
     
-    // If selection exists, only copy selected rows. Otherwise copy all.
     const rowsToProcess = selectedIds.size > 0 
-        ? dataRows.filter(r => selectedIds.has(r.segment1Id))
-        : dataRows;
-
-    // Calculate averages based on the rows to be processed
-    const processAverages = new Map<string, { total: number; count: number }>();
-    rowsToProcess.forEach(row => {
-        const current = processAverages.get(row.fileName) || { total: 0, count: 0 };
-        processAverages.set(row.fileName, {
-            total: current.total + row.latency,
-            count: current.count + 1
-        });
-    });
+        ? displayedRows.filter(r => selectedIds.has(r.segment1Id))
+        : displayedRows;
     
     if (format === 'markdown') {
-        text = `| 播放顺序 | 音色1放音结束 | 音色2放音开始 | 响应时延 | 录音文件 | 平均时延 | 备注 |\n|---|---|---|---|---|---|---|\n`;
-        rowsToProcess.forEach((row, idx) => {
-             const avg = processAverages.get(row.fileName);
-             const isFirstOfFile = idx === 0 || rowsToProcess[idx-1].fileName !== row.fileName;
-             
-             const avgText = isFirstOfFile && avg && avg.count > 0 
-                ? (avg.total / avg.count).toFixed(3) 
-                : '';
-             text += `| ${row.speakerFrom} -> ${row.speakerTo} | ${row.segment1End.toFixed(2)} | ${row.segment2Start.toFixed(2)} | ${row.latency.toFixed(2)} | ${row.fileName} | ${avgText} | ${row.remark || ''} |\n`;
+        text = `| 片段间隔 | 片段1结束 | 片段2开始 | 响应时延 | 备注 |\n|---|---|---|---|---|\n`;
+        rowsToProcess.forEach(row => {
+             text += `| ${row.segment1Index} ${row.speakerFrom} -> ${row.segment2Index} ${row.speakerTo} | ${row.segment1End.toFixed(2)} | ${row.segment2Start.toFixed(2)} | ${row.latency.toFixed(2)} | ${row.remark || '-'} |\n`;
         });
     } else {
-        // Excel 粘贴格式
-        text = `播放顺序\t音色1放音结束\t音色2放音开始\t响应时延\t录音文件\t平均时延\t备注\n`;
-        rowsToProcess.forEach((row, idx) => {
-             const avg = processAverages.get(row.fileName);
-             const isFirstOfFile = idx === 0 || rowsToProcess[idx-1].fileName !== row.fileName;
-             
-             const avgText = isFirstOfFile && avg && avg.count > 0 
-                ? (avg.total / avg.count).toFixed(3) 
-                : '';
-             text += `${row.speakerFrom} -> ${row.speakerTo}\t${row.segment1End.toFixed(2)}\t${row.segment2Start.toFixed(2)}\t${row.latency.toFixed(2)}\t${row.fileName}\t${avgText}\t${row.remark || ''}\n`;
+        text = `片段间隔\t片段1结束\t片段2开始\t响应时延\t备注\n`;
+        rowsToProcess.forEach(row => {
+             text += `${row.segment1Index} ${row.speakerFrom} -> ${row.segment2Index} ${row.speakerTo}\t${row.segment1End.toFixed(2)}\t${row.segment2Start.toFixed(2)}\t${row.latency.toFixed(2)}\t${row.remark || '-'}\n`;
         });
     }
 
@@ -248,87 +179,76 @@ const AnalysisTable: React.FC<AnalysisTableProps> = ({ files, activeSegmentId, o
 
   if (files.length === 0 || dataRows.length === 0) {
     return (
-        <div className="flex flex-1 flex-col items-center justify-center text-slate-400 bg-white rounded-xl border border-dashed border-slate-300">
+        <div className="flex flex-1 flex-col items-center justify-center rounded-lg border border-dashed border-slate-300 bg-white text-slate-400">
             <TableIcon size={42} className="mb-3 opacity-50" />
-            <p className="text-sm">处理音频文件后将在此显示分析表格</p>
+            <p className="text-sm">当前文件暂无可显示的响应时延</p>
         </div>
     );
   }
 
   return (
-    <div className="flex flex-col h-full bg-white shadow-sm rounded-xl overflow-hidden border border-slate-200 min-h-0">
-      <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between bg-slate-50/80 gap-3">
-        <div className="flex items-center gap-3 min-w-0">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-white border border-slate-200 text-slate-600 shadow-sm">
-                <TableIcon size={17} />
+    <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+      <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3">
+        <div className="flex min-w-0 items-center gap-3">
+            <div className="flex items-center rounded-lg border border-slate-200 bg-slate-50 p-1 shadow-sm">
+                {(['all', 'odd', 'even'] as const).map(item => (
+                  <button
+                    key={item}
+                    onClick={() => {
+                      setSelectedIds(new Set());
+                      onModeChange(item);
+                    }}
+                    className={`rounded-md px-3 py-1.5 text-xs font-bold ${
+                      mode === item
+                        ? 'bg-[var(--psbc-green-soft)] text-[var(--psbc-green)]'
+                        : 'text-slate-600 hover:bg-slate-100'
+                    }`}
+                    title={item === 'all' ? '显示全部响应行' : item === 'odd' ? '显示奇数响应行' : '显示偶数响应行'}
+                  >
+                    {item === 'all' ? '全部' : item === 'odd' ? '奇数' : '偶数'}
+                  </button>
+                ))}
             </div>
-            <div className="min-w-0">
-                <h2 className="text-sm font-bold text-slate-900 leading-tight">响应时延分析</h2>
-                <p className="text-xs text-slate-500 leading-tight">{dataRows.length} 行结果 · {files.length} 个文件</p>
-            </div>
-            {selectedStats && selectedStats.count > 1 && (
-                <div className="hidden sm:flex items-center gap-2 px-2.5 py-1 bg-[var(--psbc-green-soft)] text-[var(--psbc-green)] rounded-md text-xs font-semibold border border-[var(--psbc-green-line)]">
-                    <span>已选 {selectedStats.count} 项</span>
-                    <span className="w-px h-3 bg-[var(--psbc-gold)]"></span>
-                    <span>平均时延: {selectedStats.avg.toFixed(3)}s</span>
-                </div>
-            )}
         </div>
-        <div className="flex gap-2 overflow-x-auto shrink-0">
-            <div className="flex items-center bg-white border border-slate-200 rounded-lg p-1 shadow-sm">
-                <button onClick={handleSelectAll} className="px-2 py-1 text-xs text-slate-600 hover:bg-slate-100 rounded" title="全选">全选</button>
-                <div className="w-px h-3 bg-slate-200 mx-1"></div>
-                <button onClick={handleSelectOdd} className="px-2 py-1 text-xs text-slate-600 hover:bg-slate-100 rounded" title="选中奇数行">奇数</button>
-                <div className="w-px h-3 bg-slate-200 mx-1"></div>
-                <button onClick={handleSelectEven} className="px-2 py-1 text-xs text-slate-600 hover:bg-slate-100 rounded" title="选中偶数行">偶数</button>
-            </div>
-            
+        <div className="flex shrink-0 items-center gap-2 overflow-x-auto">
             <button 
                 onClick={downloadIntermediateJson}
-                className="tool-button"
+                className="tool-button h-9 px-3"
                 title="下载中间结果 JSON"
             >
                 <FileJson size={14} />
-                JSON
+                导出 JSON
             </button>
             <button 
                 onClick={() => copyToClipboard('tsv')}
-                className="tool-button brand-accent"
+                className="tool-button brand-accent h-9 px-3"
             >
-                {copiedFormat === 'tsv' ? '已复制' : 'Excel'}
+                {copiedFormat === 'tsv' ? '已复制' : '导出 Excel'}
                 <FileDown size={14} />
             </button>
             <button 
                 onClick={() => copyToClipboard('markdown')}
-                className="tool-button border-[var(--psbc-green-line)] text-[var(--psbc-green)] hover:bg-[var(--psbc-green-soft)] hover:border-[var(--psbc-green)]"
+                className="tool-button h-9 border-[var(--psbc-green-line)] px-3 text-[var(--psbc-green)] hover:border-[var(--psbc-green)] hover:bg-[var(--psbc-green-soft)]"
             >
-                {copiedFormat === 'markdown' ? '已复制' : 'Markdown'}
+                {copiedFormat === 'markdown' ? '已复制' : '导出 Markdown'}
                 <Copy size={14} />
             </button>
         </div>
       </div>
       
-      <div className="overflow-auto flex-1" ref={tableRef}>
-        <table className="w-full text-left text-[13px] text-slate-600">
-            <thead className="bg-white text-slate-600 font-semibold sticky top-0 z-10 shadow-sm border-b border-slate-200">
-                <tr>
-                    <th className="px-4 py-2.5">播放顺序</th>
-                    <th className="px-4 py-2.5">音色1结束</th>
-                    <th className="px-4 py-2.5">音色2开始</th>
-                    <th className="px-4 py-2.5">响应时延</th>
-                    <th className="px-4 py-2.5">录音文件</th>
-                    <th className="px-4 py-2.5">平均</th>
-                    <th className="px-4 py-2.5">备注</th>
+      <div className="flex-1 overflow-auto" ref={tableRef}>
+	        <table className="w-full min-w-[760px] table-fixed text-left text-[13px] text-slate-600">
+	            <thead className="sticky top-0 z-10 border-b border-slate-200 bg-white text-xs font-bold text-slate-600 shadow-[0_1px_0_rgba(15,23,42,0.04)]">
+	                <tr>
+	                    <th className="w-[180px] px-2.5 py-2.5">片段间隔</th>
+	                    <th className="w-[145px] px-2.5 py-2.5">片段1结束</th>
+	                    <th className="w-[145px] px-2.5 py-2.5">片段2开始</th>
+	                    <th className="w-[95px] px-2.5 py-2.5">响应时延</th>
+	                    <th className="w-[80px] px-2.5 py-2.5">备注</th>
                 </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-                {dataRows.map((row, idx) => {
-                    const avgData = fileAverages.get(row.fileName);
-                    const isFirstOfFile = idx === 0 || dataRows[idx-1].fileName !== row.fileName;
-                    const avgDisplay = isFirstOfFile && avgData && avgData.count > 0 
-                        ? (avgData.total / avgData.count).toFixed(3) 
-                        : '';
-
+                {displayedRows.map((row, idx) => {
                     const latencyClass = row.latency > 3.0 ? 'text-red-600 font-medium' : 'text-gray-600';
                     const isSelected = selectedIds.has(row.segment1Id);
                     const isActive = row.segment1Id === activeSegmentId;
@@ -338,7 +258,7 @@ const AnalysisTable: React.FC<AnalysisTableProps> = ({ files, activeSegmentId, o
                             key={idx} 
                             data-segment-id={`${row.segment1Id},${row.segment2Id}`}
                             onClick={(e) => handleRowClick(row, e)}
-                            className={`transition-colors cursor-pointer scroll-mt-12 ${
+                            className={`cursor-pointer scroll-mt-12 transition-colors ${
                                 isSelected 
                                     ? 'bg-[var(--psbc-green-soft)] ring-1 ring-inset ring-[var(--psbc-green-line)]' 
                                     : isActive 
@@ -346,34 +266,42 @@ const AnalysisTable: React.FC<AnalysisTableProps> = ({ files, activeSegmentId, o
                                         : 'hover:bg-slate-50'
                             }`}
                         >
-                            <td className="px-4 py-2.5 text-slate-700 font-semibold">
-                                {row.speakerFrom} <span className="text-slate-400 mx-1">→</span> {row.speakerTo}
-                            </td>
-                            <td className="px-4 py-2.5 font-mono">
+	                            <td className="px-2.5 py-2.5 font-semibold text-slate-700">
+	                                <div className="flex min-w-0 items-center gap-1.5">
+                                        <span className={`flex h-5 min-w-5 shrink-0 items-center justify-center rounded-md px-1 text-[11px] font-bold ${isSelected ? 'bg-[var(--psbc-green)] text-white' : 'bg-slate-100 text-slate-600'}`}>
+                                            {row.segment1Index}
+                                        </span>
+                                        <span className="min-w-0 truncate">{row.speakerFrom}</span>
+                                        <ArrowRight size={12} className="shrink-0 text-slate-400" />
+                                        <span className={`flex h-5 min-w-5 shrink-0 items-center justify-center rounded-md px-1 text-[11px] font-bold ${isSelected ? 'bg-[var(--psbc-green)] text-white' : 'bg-slate-100 text-slate-600'}`}>
+                                            {row.segment2Index}
+                                        </span>
+                                        <span className="min-w-0 truncate">{row.speakerTo}</span>
+	                                </div>
+	                            </td>
+	                            <td className="px-2.5 py-2.5 font-mono text-slate-700">
                                 {formatTime(row.segment1End)} <span className="text-xs text-slate-400">({row.segment1End.toFixed(2)})</span>
-                                <div className="text-[11px] text-slate-400">{row.speakerFrom}</div>
                             </td>
-                            <td className="px-4 py-2.5 font-mono">
+                            <td className="px-2.5 py-2.5 font-mono text-slate-700">
                                 {formatTime(row.segment2Start)} <span className="text-xs text-slate-400">({row.segment2Start.toFixed(2)})</span>
-                                <div className="text-[11px] text-slate-400">{row.speakerTo}</div>
                             </td>
-                            <td className={`px-4 py-2.5 ${latencyClass}`}>
+                            <td className={`px-2.5 py-2.5 font-semibold ${latencyClass}`}>
                                 {row.latency.toFixed(2)}s
                             </td>
-                            <td className="px-4 py-2.5 text-slate-800 font-medium max-w-[220px] truncate" title={row.fileName}>
-                                {isFirstOfFile ? row.fileName : ''}
-                            </td>
-                            <td className="px-4 py-2.5 font-semibold text-slate-800">
-                                {avgDisplay}
-                            </td>
-                            <td className="px-4 py-2.5 text-slate-500 text-xs max-w-[160px] truncate" title={row.remark}>
-                                {row.remark}
+                            <td className="w-[80px] px-2.5 py-2.5 text-slate-600">
+                                <span className={`block truncate ${row.remark ? '' : 'text-slate-400'}`} title={row.remark || '-'}>
+                                    {row.remark || '-'}
+                                </span>
                             </td>
                         </tr>
                     );
                 })}
             </tbody>
         </table>
+      </div>
+      <div className="flex h-10 shrink-0 items-center justify-between border-t border-slate-200 bg-white px-4 text-xs font-medium text-slate-500">
+        <span>共 {displayedRows.length} 条</span>
+        <span>点击行可联动右侧波形片段</span>
       </div>
     </div>
   );

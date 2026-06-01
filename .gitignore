@@ -61,6 +61,9 @@ Thumbs.db
 
 # OhMyOpenCode generated files
 .sisyphus/
+.superpowers/
+.playwright-cli/
+output/
 release/
 *.dmg
 *.dmg.blockmap

@@ -1,6 +1,19 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { Upload, Music4, AlertCircle, RefreshCw, Layers, Repeat, Scissors, Keyboard } from 'lucide-react';
-import { AudioFile, FileStatus, AudioSegment, AppSettings } from './types';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { AlertCircle, AudioWaveform, Clock3, RefreshCw, TrendingDown, TrendingUp } from 'lucide-react';
+import {
+  AppSettings,
+  AudioFile,
+  AudioSegment,
+  ConversionSettings,
+  FileStatus,
+  LibraryCategory,
+  LibraryCollection,
+  LibraryItem,
+  LatencyRow,
+  OutputPolicy,
+  PersistedAppState,
+  WorkspaceTab,
+} from './types';
 import { analyzeAudio, checkHealth as checkBackendHealth } from './services/apiService';
 import { DEFAULT_SETTINGS } from './constants';
 import SettingsModal from './components/SettingsModal';
@@ -12,132 +25,451 @@ import ConverterPage from './components/ConverterPage';
 import SplitterPage from './components/SplitterPage';
 import ConfirmDialog, { ConfirmConfig } from './components/ConfirmDialog';
 
+const DEFAULT_CONVERSION_SETTINGS: ConversionSettings = {
+  targetFormat: 'mp4',
+  videoCodec: 'h264',
+  resolution: 'source',
+  frameRate: 'source',
+  videoBitrate: '1500',
+  audioCodec: 'aac',
+  sampleRate: '48000',
+  channels: 'stereo',
+  audioBitrate: '192',
+};
+
+const EMPTY_OUTPUT_POLICY: OutputPolicy = {
+  directory: '',
+  naming: 'preserve',
+  existingFile: 'auto-rename',
+  afterConversion: 'none',
+};
+
+const ANALYSIS_CONTENT_WIDTH = 800;
+
+type AnalysisRowMode = 'all' | 'odd' | 'even';
+
+function makeId(prefix: string): string {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function extensionOf(name: string): string {
+  return name.split('.').pop()?.toLowerCase() || '';
+}
+
+function toLibraryItem(file: AudioFile, existing?: LibraryItem): LibraryItem {
+  return {
+    id: file.id,
+    name: file.name,
+    path: file.path || existing?.path || '',
+    size: file.size || file.file.size || existing?.size || 0,
+    duration: file.duration || existing?.duration,
+    extension: file.extension || extensionOf(file.name),
+    status:
+      file.status === FileStatus.COMPLETED
+        ? 'analyzed'
+        : file.status === FileStatus.ANALYZING
+          ? 'analyzing'
+          : file.status === FileStatus.ERROR
+            ? 'error'
+            : 'idle',
+    segmentCount: file.segments.length,
+    avgLatency: file.avgLatency || existing?.avgLatency,
+    isFavorite: file.isFavorite ?? existing?.isFavorite ?? false,
+    isDeleted: file.isDeleted ?? existing?.isDeleted ?? false,
+    collectionIds: file.collectionIds ?? existing?.collectionIds ?? [],
+    addedAt: file.addedAt || existing?.addedAt || Date.now(),
+    updatedAt: Date.now(),
+    lastAnalyzedAt: file.status === FileStatus.COMPLETED ? Date.now() : existing?.lastAnalyzedAt,
+    error: file.error,
+    segments: file.segments,
+  };
+}
+
+function buildLatencyRows(file: AudioFile | null): LatencyRow[] {
+  if (!file || file.status !== FileStatus.COMPLETED) return [];
+  const sorted = [...file.segments].sort((a, b) => a.start - b.start);
+
+  return sorted.slice(0, -1).map((segment, index) => {
+    const next = sorted[index + 1];
+    return {
+      segment1End: segment.end,
+      segment2Start: next.start,
+      latency: next.start - segment.end,
+      fileName: file.name,
+      speakerFrom: segment.speaker,
+      speakerTo: next.speaker,
+      segment1Id: segment.id,
+      segment2Id: next.id,
+      segment1Index: index + 1,
+      segment2Index: index + 2,
+      remark: segment.remark || '',
+    };
+  });
+}
+
+function filterLatencyRowsByMode(rows: LatencyRow[], mode: AnalysisRowMode): LatencyRow[] {
+  if (mode === 'odd') return rows.filter((_, index) => index % 2 === 0);
+  if (mode === 'even') return rows.filter((_, index) => index % 2 !== 0);
+  return rows;
+}
+
 const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'analyzer' | 'converter' | 'splitter'>('analyzer');
+  const [activeTab, setActiveTab] = useState<WorkspaceTab>('analyzer');
+  const [activeCategory, setActiveCategory] = useState<LibraryCategory>('all');
+  const [activeCollectionId, setActiveCollectionId] = useState<string | null>(null);
   const [files, setFiles] = useState<AudioFile[]>([]);
+  const [libraryItems, setLibraryItems] = useState<LibraryItem[]>([]);
+  const [collections, setCollections] = useState<LibraryCollection[]>([]);
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
+  const [activeSegmentId, setActiveSegmentId] = useState<string | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isLabOpen, setIsLabOpen] = useState(false);
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [editingSettingsFileId, setEditingSettingsFileId] = useState<string | null>(null);
+  const [analysisRowMode, setAnalysisRowMode] = useState<AnalysisRowMode>('all');
+  const [isAnalysisSidebarOverlaying, setIsAnalysisSidebarOverlaying] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [backendHealthy, setBackendHealthy] = useState<boolean>(true);
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [outputPolicy, setOutputPolicy] = useState<OutputPolicy>(EMPTY_OUTPUT_POLICY);
+  const [conversionSettings, setConversionSettings] = useState<ConversionSettings>(DEFAULT_CONVERSION_SETTINGS);
   const [confirmConfig, setConfirmConfig] = useState<ConfirmConfig>({
     isOpen: false,
     title: '',
     message: '',
-    onConfirm: () => {}
+    onConfirm: () => {},
   });
 
-  // --- Health Check ---
+  const activeFile = files.find(f => f.id === selectedFileId) || null;
+
+  const persistState = useCallback((
+    nextLibrary: LibraryItem[],
+    nextOutput = outputPolicy,
+    nextConversion = conversionSettings,
+    nextCollections = collections,
+  ) => {
+    if (!window.electron?.saveLibraryState) return;
+    const state: PersistedAppState = {
+      version: 1,
+      library: nextLibrary,
+      collections: nextCollections,
+      outputPolicy: nextOutput,
+      conversionSettings: nextConversion,
+      activeCategory,
+      activeCollectionId,
+    };
+    window.electron.saveLibraryState(state).catch(error => {
+      console.error('Failed to persist library state', error);
+    });
+  }, [activeCategory, activeCollectionId, collections, conversionSettings, outputPolicy]);
+
+  const upsertLibraryItem = useCallback((file: AudioFile) => {
+    setLibraryItems(prev => {
+      const existing = prev.find(item => item.id === file.id);
+      const nextItem = toLibraryItem(file, existing);
+      const next = existing
+        ? prev.map(item => (item.id === file.id ? nextItem : item))
+        : [nextItem, ...prev];
+      persistState(next);
+      return next;
+    });
+  }, [persistState]);
+
+  useEffect(() => {
+    const loadPersistedState = async () => {
+      if (!window.electron?.loadLibraryState) return;
+      const persisted = await window.electron.loadLibraryState() as PersistedAppState | null;
+      const downloads = await window.electron.getDownloadsDirectory?.();
+      const nextOutput = persisted?.outputPolicy || { ...EMPTY_OUTPUT_POLICY, directory: downloads || '' };
+      setLibraryItems(persisted?.library || []);
+      setCollections(persisted?.collections || []);
+      setOutputPolicy(nextOutput);
+      setConversionSettings(persisted?.conversionSettings || DEFAULT_CONVERSION_SETTINGS);
+      setActiveCategory(persisted?.activeCategory || 'all');
+      setActiveCollectionId(persisted?.activeCollectionId || null);
+    };
+
+    loadPersistedState().catch(error => console.error('Failed to load persisted state', error));
+  }, []);
+
+  useEffect(() => {
+    persistState(libraryItems);
+  }, [activeCategory, activeCollectionId, collections, libraryItems, persistState]);
+
+  useEffect(() => {
+    persistState(libraryItems, outputPolicy, conversionSettings);
+  }, [conversionSettings, libraryItems, outputPolicy, persistState]);
+
   const checkHealth = useCallback(async () => {
     try {
       await checkBackendHealth(settings);
       setBackendHealthy(true);
-    } catch (e) {
+    } catch {
       setBackendHealthy(false);
     }
   }, [settings]);
 
   useEffect(() => {
     checkHealth();
-    // Poll every 30 seconds or when settings change
     const interval = setInterval(checkHealth, 30000);
     return () => clearInterval(interval);
   }, [checkHealth]);
 
-  // --- File Handling ---
+  const analyze = useCallback(async (file: AudioFile, config: AppSettings) => {
+    setFiles(prev => prev.map(f => f.id === file.id ? { ...f, status: FileStatus.ANALYZING, error: undefined, updatedAt: Date.now() } : f));
+    upsertLibraryItem({ ...file, status: FileStatus.ANALYZING, error: undefined });
 
-  const analyze = async (file: AudioFile, config: AppSettings) => {
-      // Set status to ANALYZING
-      setFiles(prev => prev.map(f => f.id === file.id ? { ...f, status: FileStatus.ANALYZING, error: undefined } : f));
+    try {
+      const segments = await analyzeAudio(file.file, config);
+      setFiles(prev => prev.map(f => {
+        if (f.id !== file.id) return f;
+        const next = { ...f, status: FileStatus.COMPLETED, segments, lastAnalyzedAt: Date.now(), updatedAt: Date.now() };
+        upsertLibraryItem(next);
+        return next;
+      }));
+      setSelectedFileId(prev => prev || file.id);
+    } catch (err: any) {
+      const message = err.message || '分析失败';
+      setFiles(prev => prev.map(f => {
+        if (f.id !== file.id) return f;
+        const next = { ...f, status: FileStatus.ERROR, error: message, updatedAt: Date.now() };
+        upsertLibraryItem(next);
+        return next;
+      }));
+    }
+  }, [upsertLibraryItem]);
 
-      try {
-        const segments = await analyzeAudio(file.file, config);
-        setFiles(prev => prev.map(f => 
-            f.id === file.id 
-                ? { ...f, status: FileStatus.COMPLETED, segments } 
-                : f
-        ));
-        // If no file is selected, select this one (optional UX)
-        setSelectedFileId(prev => prev ? prev : file.id);
-      } catch (err: any) {
-        console.error("Analysis failed", err);
-        setFiles(prev => prev.map(f => 
-            f.id === file.id 
-                ? { ...f, status: FileStatus.ERROR, error: err.message || '分析失败' } 
-                : f
-        ));
-      }
-  };
+  const addFiles = useCallback((newFiles: AudioFile[], shouldAnalyze = true) => {
+    if (newFiles.length === 0) return;
+    setFiles(prev => {
+      const existingIds = new Set(prev.map(file => file.id));
+      return [...prev, ...newFiles.filter(file => !existingIds.has(file.id))];
+    });
+    newFiles.forEach(upsertLibraryItem);
+    setSelectedFileId(newFiles[0].id);
+    if (shouldAnalyze) {
+      newFiles.forEach(file => analyze(file, file.settings || settings));
+    }
+  }, [analyze, settings, upsertLibraryItem]);
 
-  const handleFileUpload = async (fileList: FileList | null) => {
+  const handleFileUpload = useCallback((fileList: FileList | null) => {
     if (!fileList || fileList.length === 0) return;
-
-    // Create file objects
     const newFiles: AudioFile[] = Array.from(fileList).map(file => ({
-      id: `file-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      id: makeId('file'),
       file,
       name: file.name,
       blobUrl: URL.createObjectURL(file),
       status: FileStatus.IDLE,
       segments: [],
+      size: file.size,
+      extension: extensionOf(file.name),
+      collectionIds: activeCollectionId ? [activeCollectionId] : [],
+      addedAt: Date.now(),
+      updatedAt: Date.now(),
     }));
+    addFiles(newFiles);
+  }, [activeCollectionId, addFiles]);
 
-    // Add to state and select the first new file
-    setFiles(prev => [...prev, ...newFiles]);
-    setSelectedFileId(newFiles[0].id);
+  const createAudioFileFromPath = useCallback(async (filePath: string, existing?: LibraryItem): Promise<AudioFile> => {
+    if (!window.electron?.readFileAsBytes) {
+      throw new Error('当前环境不支持读取本地文件路径，请在 Electron 应用中使用。');
+    }
+    const payload = await window.electron.readFileAsBytes(filePath);
+    const bytes = new Uint8Array(payload.data);
+    const file = new File([bytes], payload.name);
+    return {
+      id: existing?.id || makeId('file'),
+      file,
+      name: payload.name,
+      blobUrl: URL.createObjectURL(file),
+      status: existing?.segments?.length ? FileStatus.COMPLETED : FileStatus.IDLE,
+      segments: existing?.segments || [],
+      path: payload.path,
+      size: payload.size,
+      extension: payload.extension,
+      isFavorite: existing?.isFavorite || false,
+      isDeleted: existing?.isDeleted || false,
+      collectionIds: existing?.collectionIds || (activeCollectionId ? [activeCollectionId] : []),
+      addedAt: existing?.addedAt || Date.now(),
+      updatedAt: Date.now(),
+      lastAnalyzedAt: existing?.lastAnalyzedAt,
+    };
+  }, [activeCollectionId]);
 
-    // Trigger analysis immediately
-    newFiles.forEach(f => analyze(f, f.settings || settings));
-  };
+  const handleBrowseFiles = useCallback(async () => {
+    if (!window.electron?.selectAudioFiles) {
+      document.getElementById('sidebar-file-upload')?.click();
+      return;
+    }
 
-  const retryFile = (fileId: string) => {
-      const file = files.find(f => f.id === fileId);
-      if (file) {
-          analyze(file, file.settings || settings);
-      }
-  };
+    const references = await window.electron.selectAudioFiles();
+    const loaded = await Promise.all(references.map(ref => createAudioFileFromPath(ref.path)));
+    addFiles(loaded);
+  }, [addFiles, createAudioFileFromPath]);
 
-  const handleDeleteFile = (fileId: string) => {
+  const handleSelectLibraryItem = useCallback(async (itemId: string) => {
+    const alreadyLoaded = files.find(file => file.id === itemId);
+    if (alreadyLoaded) {
+      setSelectedFileId(itemId);
+      return;
+    }
+
+    const item = libraryItems.find(entry => entry.id === itemId);
+    if (!item?.path) return;
+
+    try {
+      const loaded = await createAudioFileFromPath(item.path, item);
+      addFiles([loaded], !item.segments?.length);
+      setSelectedFileId(loaded.id);
+    } catch (error: any) {
+      setLibraryItems(prev => prev.map(entry => entry.id === itemId ? { ...entry, status: 'error', error: error.message } : entry));
+    }
+  }, [addFiles, createAudioFileFromPath, files, libraryItems]);
+
+  const retryFile = useCallback((fileId: string) => {
+    const file = files.find(f => f.id === fileId);
+    if (file) {
+      analyze(file, file.settings || settings);
+      return;
+    }
+    handleSelectLibraryItem(fileId);
+  }, [analyze, files, handleSelectLibraryItem, settings]);
+
+  const handleDeleteFile = useCallback((fileId: string) => {
     setConfirmConfig({
       isOpen: true,
-      title: '确认删除',
-      message: '确定要删除这个音频文件及其分析结果吗？',
-      confirmText: '删除',
+      title: '移到回收站',
+      message: '确定要将这个音频文件移到回收站吗？本地原文件不会被删除。',
+      confirmText: '移到回收站',
       onConfirm: () => {
-        setFiles(prev => {
-          const deletedIndex = prev.findIndex(f => f.id === fileId);
-          const remainingFiles = prev.filter(f => f.id !== fileId);
-          const nextFile = remainingFiles[Math.min(deletedIndex, remainingFiles.length - 1)] || null;
-
-          setSelectedFileId(prevSelected => (
-            prevSelected === fileId ? nextFile?.id || null : prevSelected
-          ));
-
-          return remainingFiles;
+        setFiles(prev => prev.map(file => file.id === fileId ? { ...file, isDeleted: true } : file));
+        setLibraryItems(prev => {
+          const next = prev.map(item => item.id === fileId ? { ...item, isDeleted: true, status: 'deleted' as const, updatedAt: Date.now() } : item);
+          persistState(next);
+          return next;
         });
-      }
+        setSelectedFileId(prev => prev === fileId ? null : prev);
+      },
     });
-  };
+  }, [persistState]);
 
-  const handleReanalyzeRequest = (fileId: string) => {
+  const handleRestoreFile = useCallback((fileId: string) => {
+    setFiles(prev => prev.map(file => file.id === fileId ? { ...file, isDeleted: false, updatedAt: Date.now() } : file));
+    setLibraryItems(prev => {
+      const next = prev.map(item => item.id === fileId ? { ...item, isDeleted: false, status: 'idle' as const, updatedAt: Date.now() } : item);
+      persistState(next);
+      return next;
+    });
+  }, [persistState]);
+
+  const handlePermanentDeleteFile = useCallback((fileId: string) => {
+    setConfirmConfig({
+      isOpen: true,
+      title: '彻底删除记录',
+      message: '确定要从应用文件库中彻底删除这条记录吗？本地原文件不会被删除。',
+      confirmText: '彻底删除',
+      onConfirm: () => {
+        setFiles(prev => prev.filter(file => file.id !== fileId));
+        setLibraryItems(prev => {
+          const next = prev.filter(item => item.id !== fileId);
+          persistState(next);
+          return next;
+        });
+        setSelectedFileId(prev => prev === fileId ? null : prev);
+      },
+    });
+  }, [persistState]);
+
+  const handleCreateLibrary = useCallback((name: string) => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    const nextCollection: LibraryCollection = {
+      id: makeId('library'),
+      name: trimmed,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+    setCollections(prev => {
+      const next = [nextCollection, ...prev];
+      persistState(libraryItems, outputPolicy, conversionSettings, next);
+      return next;
+    });
+    setActiveCategory('all');
+    setActiveCollectionId(nextCollection.id);
+  }, [conversionSettings, libraryItems, outputPolicy, persistState]);
+
+  const handleDeleteLibrary = useCallback((collectionId: string) => {
+    const collection = collections.find(item => item.id === collectionId);
+    if (!collection) return;
+
+    setConfirmConfig({
+      isOpen: true,
+      title: '删除文件库',
+      message: `确定要删除“${collection.name}”吗？删除文件库只会移除这个自定义库，不会删除库内文件或本地原文件。`,
+      confirmText: '删除文件库',
+      onConfirm: () => {
+        const nextCollections = collections.filter(item => item.id !== collectionId);
+        const nextLibrary = libraryItems.map(item => ({
+          ...item,
+          collectionIds: item.collectionIds.filter(id => id !== collectionId),
+          updatedAt: item.collectionIds.includes(collectionId) ? Date.now() : item.updatedAt,
+        }));
+
+        setCollections(nextCollections);
+        setLibraryItems(nextLibrary);
+        setFiles(prev => prev.map(file => ({
+          ...file,
+          collectionIds: (file.collectionIds || []).filter(id => id !== collectionId),
+          updatedAt: file.collectionIds?.includes(collectionId) ? Date.now() : file.updatedAt,
+        })));
+        if (activeCollectionId === collectionId) {
+          setActiveCollectionId(null);
+          setActiveCategory('all');
+        }
+        persistState(nextLibrary, outputPolicy, conversionSettings, nextCollections);
+      },
+    });
+  }, [activeCollectionId, collections, conversionSettings, libraryItems, outputPolicy, persistState]);
+
+  const handleMoveToLibrary = useCallback((fileId: string, collectionId: string | null) => {
+    const nextIds = collectionId ? [collectionId] : [];
+    setFiles(prev => prev.map(file => file.id === fileId ? { ...file, collectionIds: nextIds, updatedAt: Date.now() } : file));
+    setLibraryItems(prev => {
+      const next = prev.map(item => item.id === fileId ? { ...item, collectionIds: nextIds, updatedAt: Date.now() } : item);
+      persistState(next);
+      return next;
+    });
+  }, [persistState]);
+
+  const handleToggleFavorite = useCallback((fileId: string) => {
+    setFiles(prev => prev.map(file => file.id === fileId ? { ...file, isFavorite: !file.isFavorite } : file));
+    setLibraryItems(prev => {
+      const next = prev.map(item => item.id === fileId ? { ...item, isFavorite: !item.isFavorite, updatedAt: Date.now() } : item);
+      persistState(next);
+      return next;
+    });
+  }, [persistState]);
+
+  const handleReanalyzeRequest = useCallback((fileId: string) => {
     const file = files.find(f => f.id === fileId);
     const hasCustomSettings = !!file?.settings;
-    
+
     setConfirmConfig({
       isOpen: true,
       title: '重新分析',
       message: `确定要使用${hasCustomSettings ? '该文件的专属配置' : '全局默认配置'}重新分析此音频吗？现有的片段修改将会丢失。`,
       confirmText: '重新分析',
-      onConfirm: () => {
-        retryFile(fileId);
-      }
+      onConfirm: () => retryFile(fileId),
     });
-  };
+  }, [files, retryFile]);
 
-  // --- Drag & Drop & Paste ---
+  const handleSegmentUpdate = useCallback((fileId: string, segments: AudioSegment[]) => {
+    setFiles(prev => prev.map(file => {
+      if (file.id !== fileId) return file;
+      const next = { ...file, segments, status: FileStatus.COMPLETED, updatedAt: Date.now() };
+      upsertLibraryItem(next);
+      return next;
+    }));
+  }, [upsertLibraryItem]);
 
   const onDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -163,199 +495,206 @@ const App: React.FC = () => {
     };
     window.addEventListener('paste', handlePaste);
     return () => window.removeEventListener('paste', handlePaste);
-  }, [files, settings]); 
+  }, [handleFileUpload]);
 
-  const [activeSegmentId, setActiveSegmentId] = useState<string | null>(null);
+  const selectedLatencyRows = useMemo(() => buildLatencyRows(activeFile), [activeFile]);
+  const modeLatencyRows = useMemo(
+    () => filterLatencyRowsByMode(selectedLatencyRows, analysisRowMode),
+    [analysisRowMode, selectedLatencyRows],
+  );
 
-  // ... existing code ...
+  const analysisStats = useMemo(() => {
+    const latencies = modeLatencyRows.map(row => row.latency).filter(value => Number.isFinite(value));
+    const positiveLatencies = latencies.filter(value => value > 0);
+    const avg = latencies.length ? latencies.reduce((sum, value) => sum + value, 0) / latencies.length : 0;
+    const max = latencies.length ? Math.max(...latencies) : 0;
+    const min = positiveLatencies.length ? Math.min(...positiveLatencies) : 0;
+    return { segments: modeLatencyRows.length, avg, max, min };
+  }, [modeLatencyRows]);
 
-  const handleSegmentUpdate = useCallback((fileId: string, segments: AudioSegment[]) => {
-      setFiles(prev => prev.map(f => f.id === fileId ? { ...f, segments } : f));
-  }, []);
+  const analysisStatCards = [
+    { label: '片段数', value: analysisStats.segments, hint: '当前模式', icon: AudioWaveform, tone: 'blue' },
+    { label: '平均时延', value: `${analysisStats.avg.toFixed(2)}s`, hint: '当前平均', icon: Clock3, tone: 'orange' },
+    { label: '最高时延', value: `${analysisStats.max.toFixed(2)}s`, hint: '最大值', icon: TrendingUp, tone: 'purple' },
+    { label: '最低时延', value: `${analysisStats.min.toFixed(2)}s`, hint: '最小值', icon: TrendingDown, tone: 'sky' },
+  ];
 
-  // --- Render ---
-
-  const activeFile = files.find(f => f.id === selectedFileId) || null;
+  const statToneClass: Record<string, string> = {
+    green: 'bg-emerald-50 text-[var(--psbc-green)] ring-emerald-100',
+    blue: 'bg-blue-50 text-blue-600 ring-blue-100',
+    orange: 'bg-orange-50 text-orange-600 ring-orange-100',
+    purple: 'bg-violet-50 text-violet-600 ring-violet-100',
+    sky: 'bg-sky-50 text-sky-600 ring-sky-100',
+  };
 
   return (
-    <div className="app-shell flex h-screen w-full flex-col bg-slate-100 text-slate-900">
-      
-      {/* Header */}
-      <header className="h-14 bg-white/95 border-b border-slate-200 flex items-center justify-between px-4 lg:px-5 shadow-sm z-20 backdrop-blur">
-        <div className="flex items-center gap-2.5 min-w-0">
-            <div className="relative bg-[var(--psbc-green)] p-2 rounded-lg shadow-sm">
-                <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-[var(--psbc-gold)] ring-2 ring-white" />
-                <Music4 className="text-white" size={20} />
-            </div>
-            <div className="hidden md:block min-w-0">
-                <h1 className="text-[15px] font-bold text-slate-900 tracking-tight leading-tight">UAudioLab</h1>
-                <p className="text-[11px] text-slate-500 leading-tight">离线音频工作台</p>
-            </div>
-        </div>
+    <div className="app-shell flex h-screen w-full bg-slate-50 text-slate-900">
+      <AudioFileSidebar
+        files={files}
+        libraryItems={libraryItems}
+        selectedFileId={selectedFileId}
+        activeTab={activeTab}
+        activeCategory={activeCategory}
+        activeCollectionId={activeCollectionId}
+        collections={collections}
+        onChangeTab={setActiveTab}
+        onChangeCategory={(category) => {
+          setActiveCategory(category);
+          setActiveCollectionId(null);
+        }}
+        onChangeCollection={(collectionId) => {
+          setActiveCategory('all');
+          setActiveCollectionId(collectionId);
+        }}
+        onSelectFile={setSelectedFileId}
+        onSelectLibraryItem={handleSelectLibraryItem}
+        onUpload={handleFileUpload}
+        onBrowseFiles={handleBrowseFiles}
+        onCreateLibrary={handleCreateLibrary}
+        onDeleteLibrary={handleDeleteLibrary}
+        onMoveToLibrary={handleMoveToLibrary}
+        onRetry={retryFile}
+        onReanalyze={handleReanalyzeRequest}
+        onDelete={handleDeleteFile}
+        onRestore={handleRestoreFile}
+        onPermanentDelete={handlePermanentDeleteFile}
+        onToggleFavorite={handleToggleFavorite}
+        onOpenFileSettings={setEditingSettingsFileId}
+        onOpenGlobalSettings={() => setIsSettingsOpen(true)}
+      />
 
-        {/* Navigation Tabs */}
-        <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200">
-            <button
-                onClick={() => setActiveTab('analyzer')}
-                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-md text-sm font-medium transition-all ${activeTab === 'analyzer' ? 'bg-white text-[var(--psbc-green)] shadow-sm ring-1 ring-[var(--psbc-green-line)]' : 'text-slate-500 hover:text-slate-700'}`}
-            >
-                <Layers size={16} />
-                分析
-            </button>
-            <button
-                onClick={() => setActiveTab('splitter')}
-                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-md text-sm font-medium transition-all ${activeTab === 'splitter' ? 'bg-white text-[var(--psbc-green)] shadow-sm ring-1 ring-[var(--psbc-green-line)]' : 'text-slate-500 hover:text-slate-700'}`}
-            >
-                <Scissors size={16} />
-                分割
-            </button>
-            <button
-                onClick={() => setActiveTab('converter')}
-                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-md text-sm font-medium transition-all ${activeTab === 'converter' ? 'bg-white text-[var(--psbc-green)] shadow-sm ring-1 ring-[var(--psbc-green-line)]' : 'text-slate-500 hover:text-slate-700'}`}
-            >
-                <Repeat size={16} />
-                转换
-            </button>
-        </div>
-
-        <div className="flex items-center gap-2">
-            <div className="hidden lg:flex items-center gap-1.5 rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs text-slate-500">
-                <Keyboard size={13} />
-                <kbd className="rounded bg-white px-1.5 py-0.5 font-mono text-[11px] text-slate-600 shadow-sm">Cmd/Ctrl+V</kbd>
-            </div>
-        </div>
-      </header>
-      
-      {/* Health Warning Banner */}
-      {!backendHealthy && (
-        <div className="bg-red-50 border-b border-red-200 px-6 py-2 flex items-center justify-between text-sm text-red-700">
+      <div className="flex min-w-0 flex-1 flex-col">
+        {!backendHealthy && (
+          <div className="flex items-center justify-between border-b border-red-200 bg-red-50 px-5 py-2 text-sm text-red-700">
             <div className="flex items-center gap-2">
-                <AlertCircle size={16} />
-                <span>内置音频分析服务未连接，请重试</span>
+              <AlertCircle size={16} />
+              <span>内置音频分析服务未连接，请重试</span>
             </div>
-            <button onClick={checkHealth} className="flex items-center gap-1 hover:underline font-medium">
-                <RefreshCw size={14} /> 重试
+            <button onClick={checkHealth} className="flex items-center gap-1 font-medium hover:underline">
+              <RefreshCw size={14} /> 重试
             </button>
-        </div>
-      )}
-
-      <div className="flex flex-1 overflow-hidden relative min-h-0">
-        
-        {activeTab === 'converter' ? (
-            <ConverterPage 
-                onBack={() => setActiveTab('analyzer')} 
-                existingFiles={files}
-            />
-        ) : activeTab === 'splitter' ? (
-            <SplitterPage 
-                onBack={() => setActiveTab('analyzer')}
-            />
-        ) : (
-            <>
-                {/* Left Sidebar - Audio File List */}
-                <AudioFileSidebar
-                    files={files}
-                    selectedFileId={selectedFileId}
-                    isCollapsed={isSidebarCollapsed}
-                    onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-                    onSelectFile={setSelectedFileId}
-                    onUpload={handleFileUpload}
-                    onRetry={retryFile}
-                    onReanalyze={handleReanalyzeRequest}
-                    onDelete={handleDeleteFile}
-                    onOpenFileSettings={setEditingSettingsFileId}
-                    onOpenGlobalSettings={() => setIsSettingsOpen(true)}
-                    onOpenLab={() => setIsLabOpen(true)}
-                />
-
-                {/* Main Content Area */}
-                <main
-                    className={`flex-1 flex flex-col gap-4 p-4 lg:p-5 overflow-hidden relative transition-all duration-300 min-w-0 ${isDragging ? 'bg-[var(--psbc-green-soft)]/50 ring-4 ring-[var(--psbc-green-line)] inset-0' : ''}`}
-                    onDragOver={onDragOver}
-                    onDragLeave={onDragLeave}
-                    onDrop={onDrop}
-                >
-                    {/* Empty State */}
-                    {files.length === 0 && (
-                        <div className="flex-1 flex flex-col items-center justify-center border border-dashed border-slate-300 rounded-2xl bg-white/70 text-slate-400 shadow-inner">
-                            <div className="mb-4 rounded-2xl bg-slate-100 p-5">
-                                <Upload size={44} className="text-slate-400" />
-                            </div>
-                            <h3 className="text-lg font-semibold text-slate-700 mb-2">拖拽音频文件到此处</h3>
-                            <p className="max-w-md text-center text-sm leading-6">
-                                支持 .mp3, .wav, .m4a, .mp4 等格式<br/>
-                                或通过左侧栏上传按钮添加文件
-                            </p>
-                        </div>
-                    )}
-
-                    {/* Analysis Table */}
-                    {files.length > 0 && (
-                        <AnalysisTable
-                            files={files}
-                            activeSegmentId={activeSegmentId}
-                            onSegmentSelect={setActiveSegmentId}
-                        />
-                    )}
-
-                    {/* Drag Overlay */}
-                    {isDragging && (
-                        <div className="absolute inset-0 bg-[var(--psbc-green-soft)]/80 backdrop-blur-sm z-50 flex items-center justify-center border-4 border-[var(--psbc-green)] rounded-lg m-4">
-                            <div className="bg-white px-8 py-4 rounded-xl shadow-xl text-[var(--psbc-green)] font-bold text-lg animate-bounce">
-                                松开鼠标以上传
-                            </div>
-                        </div>
-                    )}
-                </main>
-
-                {/* Right Sidebar - Waveform Player */}
-                {selectedFileId && (
-                    <WaveformSidebar
-                        file={activeFile}
-                        onUpdateSegments={handleSegmentUpdate}
-                        onClose={() => setSelectedFileId(null)}
-                        activeSegmentId={activeSegmentId}
-                        onSegmentSelect={setActiveSegmentId}
-                        onReanalyze={handleReanalyzeRequest}
-                        onOpenSettings={setEditingSettingsFileId}
-                    />
-                )}
-            </>
+          </div>
         )}
+
+        <div className="relative flex min-h-0 flex-1 overflow-hidden">
+          {activeTab === 'converter' ? (
+            <ConverterPage
+              onBack={() => setActiveTab('analyzer')}
+              existingFiles={files}
+              libraryItems={libraryItems}
+              outputPolicy={outputPolicy}
+              conversionSettings={conversionSettings}
+              onOutputPolicyChange={(next) => {
+                setOutputPolicy(next);
+              }}
+              onConversionSettingsChange={setConversionSettings}
+            />
+          ) : activeTab === 'splitter' ? (
+            <SplitterPage onBack={() => setActiveTab('analyzer')} />
+          ) : (
+            <>
+              <main
+                className={`relative flex min-w-0 flex-1 flex-col gap-4 overflow-hidden bg-slate-50/70 p-5 transition-colors ${
+                  isDragging ? 'bg-[var(--psbc-green-soft)]/60 ring-4 ring-[var(--psbc-green-line)]' : ''
+                }`}
+                style={isAnalysisSidebarOverlaying ? { width: ANALYSIS_CONTENT_WIDTH, flex: '0 0 auto' } : undefined}
+                onDragOver={onDragOver}
+                onDragLeave={onDragLeave}
+                onDrop={onDrop}
+              >
+                <div className="grid shrink-0 grid-cols-4 gap-2">
+                  {analysisStatCards.map(({ label, value, hint, icon: Icon, tone }) => (
+                    <div key={label} className="group relative min-w-0 rounded-lg border border-slate-200 bg-white px-3 py-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-colors hover:border-slate-300">
+                      <div className="min-w-0 pr-8">
+                        <div className="whitespace-nowrap text-[11px] font-bold leading-none text-slate-500">{label}</div>
+                        <div className="mt-2 whitespace-nowrap text-[20px] font-bold leading-none text-slate-950">{value}</div>
+                        <div className="mt-2 whitespace-nowrap text-[11px] font-medium leading-none text-slate-500">{hint}</div>
+                      </div>
+                      <div className={`absolute right-3 top-3 flex h-7 w-7 items-center justify-center rounded-lg ring-1 ${statToneClass[tone]}`}>
+                        <Icon size={15} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {files.length === 0 ? (
+                  <div className="flex flex-1 flex-col items-center justify-center rounded-lg border border-dashed border-slate-300 bg-white text-slate-400 shadow-inner">
+                    <button
+                      onClick={handleBrowseFiles}
+                      className="mb-4 flex h-16 w-16 items-center justify-center rounded-xl bg-slate-100 text-slate-500 transition-transform hover:scale-105"
+                    >
+                      <FileUploadIcon />
+                    </button>
+                    <h3 className="mb-2 text-lg font-semibold text-slate-700">拖拽音频文件到此处</h3>
+                    <p className="max-w-md text-center text-sm leading-6">
+                      支持 .mp3, .wav, .m4a, .mp4 等格式，也可以从左侧文件库添加。
+                    </p>
+                  </div>
+                ) : (
+                  <AnalysisTable
+                    files={activeFile ? [activeFile] : []}
+                    mode={analysisRowMode}
+                    onModeChange={setAnalysisRowMode}
+                    activeSegmentId={activeSegmentId}
+                    onSegmentSelect={setActiveSegmentId}
+                  />
+                )}
+
+                {isDragging && (
+                  <div className="absolute inset-4 z-50 flex items-center justify-center rounded-xl border-4 border-[var(--psbc-green)] bg-[var(--psbc-green-soft)]/80 backdrop-blur-sm">
+                    <div className="rounded-xl bg-white px-8 py-4 text-lg font-bold text-[var(--psbc-green)] shadow-xl">
+                      松开鼠标以上传
+                    </div>
+                  </div>
+                )}
+              </main>
+
+              <WaveformSidebar
+                file={activeFile}
+                onUpdateSegments={handleSegmentUpdate}
+                onClose={() => setSelectedFileId(null)}
+                activeSegmentId={activeSegmentId}
+                onSegmentSelect={setActiveSegmentId}
+                onReanalyze={handleReanalyzeRequest}
+                onOpenSettings={setEditingSettingsFileId}
+                onOverlayChange={setIsAnalysisSidebarOverlaying}
+              />
+            </>
+          )}
+        </div>
       </div>
 
-      <ConfirmDialog 
-        config={confirmConfig} 
-        onClose={() => setConfirmConfig(prev => ({ ...prev, isOpen: false }))} 
+      <ConfirmDialog
+        config={confirmConfig}
+        onClose={() => setConfirmConfig(prev => ({ ...prev, isOpen: false }))}
       />
 
-      <SettingsModal 
-        isOpen={isSettingsOpen || editingSettingsFileId !== null} 
-        title={editingSettingsFileId ? "文件专属配置" : "全局默认配置"}
+      <SettingsModal
+        isOpen={isSettingsOpen || editingSettingsFileId !== null}
+        title={editingSettingsFileId ? '文件专属配置' : '全局默认配置'}
         onClose={() => {
-            setIsSettingsOpen(false);
-            setEditingSettingsFileId(null);
+          setIsSettingsOpen(false);
+          setEditingSettingsFileId(null);
         }}
         settings={
-            editingSettingsFileId 
-                ? (files.find(f => f.id === editingSettingsFileId)?.settings || settings)
-                : settings
+          editingSettingsFileId
+            ? (files.find(f => f.id === editingSettingsFileId)?.settings || settings)
+            : settings
         }
         onReset={editingSettingsFileId ? () => {
-            setFiles(prev => prev.map(f => f.id === editingSettingsFileId ? { ...f, settings: undefined } : f));
+          setFiles(prev => prev.map(f => f.id === editingSettingsFileId ? { ...f, settings: undefined } : f));
         } : undefined}
         onSave={(newSettings) => {
-            if (editingSettingsFileId) {
-                setFiles(prev => prev.map(f => f.id === editingSettingsFileId ? { ...f, settings: newSettings } : f));
-            } else {
-                setSettings(newSettings);
-                // Re-check health when global settings change
-                setTimeout(checkHealth, 100);
-            }
+          if (editingSettingsFileId) {
+            setFiles(prev => prev.map(f => f.id === editingSettingsFileId ? { ...f, settings: newSettings } : f));
+          } else {
+            setSettings(newSettings);
+            setTimeout(checkHealth, 100);
+          }
         }}
       />
-      
-      <LabModal 
+
+      <LabModal
         isOpen={isLabOpen}
         onClose={() => setIsLabOpen(false)}
         currentSegments={activeFile?.segments || []}
@@ -365,5 +704,13 @@ const App: React.FC = () => {
     </div>
   );
 };
+
+const FileUploadIcon: React.FC = () => (
+  <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 16V4" />
+    <path d="m7 9 5-5 5 5" />
+    <path d="M20 16.5V19a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-2.5" />
+  </svg>
+);
 
 export default App;

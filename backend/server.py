@@ -108,6 +108,28 @@ def setup_ffmpeg():
 
 FFMPEG_BINARY = setup_ffmpeg()
 
+ALLOWED_TARGET_FORMATS = {"mp4", "m4a", "wav", "mp3", "aac", "ogg", "flac", "webm"}
+ALLOWED_VIDEO_CODECS = {
+    "source": None,
+    "h264": "libx264",
+    "h265": "libx265",
+    "vp9": "libvpx-vp9",
+}
+ALLOWED_AUDIO_CODECS = {
+    "source": None,
+    "aac": "aac",
+    "mp3": "libmp3lame",
+    "wav": "pcm_s16le",
+    "flac": "flac",
+    "opus": "libopus",
+}
+ALLOWED_RESOLUTIONS = {"source", "3840x2160", "2560x1440", "1920x1080", "1280x720", "854x480"}
+ALLOWED_FRAME_RATES = {"source", "60", "30", "25", "24"}
+ALLOWED_VIDEO_BITRATES = {"source", "800", "1500", "2500", "5000", "8000"}
+ALLOWED_SAMPLE_RATES = {"source", "16000", "22050", "44100", "48000"}
+ALLOWED_CHANNELS = {"source": None, "mono": "1", "stereo": "2", "left": "pan=mono|c0=FL", "right": "pan=mono|c0=FR"}
+ALLOWED_AUDIO_BITRATES = {"source", "96", "128", "192", "256", "320"}
+
 # 设置上传文件临时存储路径
 # 优先尝试 /tmp (Linux/Mac), 失败则使用当前目录下的 audio_uploads (Windows)
 UPLOAD_FOLDER = "/tmp/audio_uploads"
@@ -120,6 +142,111 @@ if not os.path.exists(UPLOAD_FOLDER):
             os.makedirs(UPLOAD_FOLDER)
 
 logging.info(f"Upload folder set to: {UPLOAD_FOLDER}")
+
+
+def require_allowed(value, allowed, field_name):
+    if value not in allowed:
+        raise ValueError(f"Invalid {field_name}: {value}")
+    return value
+
+
+def build_convert_command(ffmpeg_path, input_path, output_path, form):
+    target_format = require_allowed(
+        (form.get("target_format") or form.get("targetFormat") or "mp4").lower(),
+        ALLOWED_TARGET_FORMATS,
+        "target_format",
+    )
+    video_codec = require_allowed(form.get("video_codec", "source"), ALLOWED_VIDEO_CODECS, "video_codec")
+    resolution = require_allowed(form.get("resolution", "source"), ALLOWED_RESOLUTIONS, "resolution")
+    frame_rate = require_allowed(form.get("frame_rate", "source"), ALLOWED_FRAME_RATES, "frame_rate")
+    video_bitrate = require_allowed(form.get("video_bitrate", "source"), ALLOWED_VIDEO_BITRATES, "video_bitrate")
+    audio_codec = require_allowed(form.get("audio_codec", "source"), ALLOWED_AUDIO_CODECS, "audio_codec")
+    sample_rate = require_allowed(form.get("sample_rate", "source"), ALLOWED_SAMPLE_RATES, "sample_rate")
+    channels = require_allowed(form.get("channels", "source"), ALLOWED_CHANNELS, "channels")
+    audio_bitrate = require_allowed(form.get("audio_bitrate", "source"), ALLOWED_AUDIO_BITRATES, "audio_bitrate")
+
+    cmd = [ffmpeg_path, "-i", input_path]
+
+    video_encoder = ALLOWED_VIDEO_CODECS[video_codec]
+    if video_encoder:
+        cmd.extend(["-c:v", video_encoder])
+        if video_encoder == "libx264":
+            cmd.extend(["-preset", "medium", "-movflags", "+faststart"])
+
+    if resolution != "source":
+        width, height = resolution.split("x", 1)
+        cmd.extend(["-vf", f"scale={width}:{height}"])
+
+    if frame_rate != "source":
+        cmd.extend(["-r", frame_rate])
+
+    if video_bitrate != "source":
+        cmd.extend(["-b:v", f"{video_bitrate}k"])
+
+    audio_encoder = ALLOWED_AUDIO_CODECS[audio_codec]
+    if audio_encoder:
+        cmd.extend(["-c:a", audio_encoder])
+
+    if sample_rate != "source":
+        cmd.extend(["-ar", sample_rate])
+
+    channel_value = ALLOWED_CHANNELS[channels]
+    if channels in {"mono", "stereo"} and channel_value:
+        cmd.extend(["-ac", channel_value])
+    elif channels in {"left", "right"} and channel_value:
+        cmd.extend(["-af", channel_value])
+
+    if audio_bitrate != "source":
+        cmd.extend(["-b:a", f"{audio_bitrate}k"])
+
+    if audio_codec == "source" and target_format in {"mp3", "m4a", "aac"}:
+        cmd.extend(["-c:a", "aac" if target_format in {"m4a", "aac"} else "libmp3lame"])
+
+    cmd.extend(["-y", output_path])
+    return cmd, target_format
+
+
+def _unique_cluster_count(labels):
+    return len(set(int(label) for label in labels))
+
+
+def cluster_audio_features(features, n_clusters):
+    try:
+        gmm = GaussianMixture(
+            n_components=n_clusters,
+            covariance_type="diag",
+            n_init=5,
+            random_state=42,
+        )
+        labels = gmm.fit_predict(features)
+        if n_clusters > 1 and _unique_cluster_count(labels) < 2:
+            logging.warning(
+                "GMM collapsed to one timbre label despite requested clusters; falling back to KMeans"
+            )
+            raise ValueError("GMM collapsed to one cluster")
+        return labels
+    except Exception as gmm_err:
+        logging.warning(f"GMM failed ({gmm_err}), falling back to KMeans")
+        kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init=10)
+        return kmeans.fit_predict(features)
+
+
+def smooth_labels_preserving_clusters(labels, smoothing_width, n_clusters):
+    kernel_size = smoothing_width if smoothing_width % 2 == 1 else smoothing_width + 1
+    if kernel_size <= 1:
+        return labels
+
+    smoothed_labels = medfilt(labels, kernel_size=kernel_size)
+    raw_count = _unique_cluster_count(labels)
+    smoothed_count = _unique_cluster_count(smoothed_labels)
+
+    if n_clusters > 1 and raw_count > 1 and smoothed_count < 2:
+        logging.warning(
+            "Median smoothing collapsed speaker labels; keeping unsmoothed labels to preserve timbre diversity"
+        )
+        return labels
+
+    return smoothed_labels
 
 
 def process_audio(
@@ -229,26 +356,11 @@ def process_audio(
         # 4. 聚类 (GMM - Gaussian Mixture Model)
         # GMM 比 K-Means 更适合说话人识别，因为它能更好地模拟每个说话人的特征分布（方差）
         # n_init=5 尝试多次初始化以避免局部最优
-        try:
-            gmm = GaussianMixture(
-                n_components=n_clusters,
-                covariance_type="diag",
-                n_init=5,
-                random_state=42,
-            )
-            labels = gmm.fit_predict(smoothed_features)
-        except Exception as gmm_err:
-            logging.warning(f"GMM failed ({gmm_err}), falling back to KMeans")
-            kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init=10)
-            labels = kmeans.fit_predict(smoothed_features)
+        labels = cluster_audio_features(smoothed_features, n_clusters)
 
         # 4.1 平滑标签 (Median Filter)
         # 使用中值滤波去除短暂的跳变
-        # Ensure kernel_size is odd
-        kernel_size = (
-            smoothing_width if smoothing_width % 2 == 1 else smoothing_width + 1
-        )
-        labels = medfilt(labels, kernel_size=kernel_size)
+        labels = smooth_labels_preserving_clusters(labels, smoothing_width, n_clusters)
 
         # 5. 将帧标签转换为时间片段
         segments = []
@@ -424,7 +536,7 @@ def convert_audio():
     file = request.files["file"]
     target_format = (
         request.form.get("target_format") or request.form.get("targetFormat") or "mp4"
-    )
+    ).lower()
 
     if file.filename == "":
         return jsonify({"error": "No selected file"}), 400
@@ -444,12 +556,12 @@ def convert_audio():
         )
         temp_output.close()
 
-        # Use the globally found FFMPEG_BINARY
-        ffmpeg_path = FFMPEG_BINARY
-        logging.info(f"Using ffmpeg at: {ffmpeg_path}")
-
-        # Build command
-        cmd = [ffmpeg_path, "-i", temp_input.name, "-y", temp_output.name]
+        cmd, target_format = build_convert_command(
+            FFMPEG_BINARY,
+            temp_input.name,
+            temp_output.name,
+            request.form,
+        )
 
         # Run conversion with timeout
         logging.info(f"Starting conversion: {' '.join(cmd)}")
@@ -473,6 +585,9 @@ def convert_audio():
     except subprocess.TimeoutExpired:
         logging.error("Conversion timed out")
         return jsonify({"error": "Conversion timed out"}), 504
+    except ValueError as e:
+        logging.error(f"Invalid conversion option: {str(e)}")
+        return jsonify({"error": str(e)}), 400
     except Exception as e:
         logging.error(f"Conversion error: {str(e)}")
         return jsonify({"error": str(e)}), 500

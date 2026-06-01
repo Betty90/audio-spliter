@@ -1,11 +1,25 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import WaveSurfer from 'wavesurfer.js';
 import RegionsPlugin from 'wavesurfer.js/dist/plugins/regions.js';
-import { Play, Pause, SkipBack, SkipForward, ZoomIn, ZoomOut, Scissors, Save, Trash2, Merge, RefreshCw, Settings, Download, Loader2 } from 'lucide-react';
+import { Play, Pause, SkipBack, SkipForward, ZoomIn, ZoomOut, Scissors, Save, Trash2, Merge, RefreshCw, Settings, Download, Loader2, X } from 'lucide-react';
 import { AudioFile, AudioSegment } from '../types';
 import { SPEAKER_COLORS } from '../constants';
 import ConfirmDialog, { ConfirmConfig } from './ConfirmDialog';
 import { extractAudioSegment } from '../utils/audioUtils';
+
+const DEFAULT_PANEL_WIDTH_RATIO = 0.5;
+const MAX_PANEL_WIDTH_RATIO = 0.8;
+const MIN_ANALYSIS_CONTENT_WIDTH = 800;
+const MIN_PANEL_WIDTH = 360;
+const PANEL_WIDTH_FALLBACK = 720;
+
+function getDefaultPanelWidth(workspaceWidth?: number): number {
+  if (typeof window === 'undefined') return PANEL_WIDTH_FALLBACK;
+  const viewportMaxWidth = Math.round(window.innerWidth * MAX_PANEL_WIDTH_RATIO);
+  const maxWidth = workspaceWidth ? Math.min(viewportMaxWidth, workspaceWidth) : viewportMaxWidth;
+  const availableWidth = workspaceWidth ? workspaceWidth - MIN_ANALYSIS_CONTENT_WIDTH : Math.round(window.innerWidth * DEFAULT_PANEL_WIDTH_RATIO);
+  return Math.min(maxWidth, Math.max(MIN_PANEL_WIDTH, availableWidth));
+}
 
 interface WaveformSidebarProps {
   file: AudioFile | null;
@@ -15,9 +29,11 @@ interface WaveformSidebarProps {
   onSegmentSelect?: (id: string | null) => void;
   onReanalyze?: (fileId: string) => void;
   onOpenSettings?: (fileId: string) => void;
+  onOverlayChange?: (isOverlaying: boolean) => void;
 }
 
-const WaveformSidebar: React.FC<WaveformSidebarProps> = ({ file, onUpdateSegments, onClose, activeSegmentId, onSegmentSelect, onReanalyze, onOpenSettings }) => {
+const WaveformSidebar: React.FC<WaveformSidebarProps> = ({ file, onUpdateSegments, onClose, activeSegmentId, onSegmentSelect, onReanalyze, onOpenSettings, onOverlayChange }) => {
+  const panelRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const wavesurferRef = useRef<WaveSurfer | null>(null);
   const regionsRef = useRef<RegionsPlugin | null>(null);
@@ -28,7 +44,10 @@ const WaveformSidebar: React.FC<WaveformSidebarProps> = ({ file, onUpdateSegment
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
 
-  const [width, setWidth] = useState(460);
+  const [width, setWidth] = useState<number>(() => getDefaultPanelWidth());
+  const [workspaceWidth, setWorkspaceWidth] = useState(0);
+  const hasMeasuredWorkspaceRef = useRef(false);
+  const userResizedRef = useRef(false);
   const [isResizing, setIsResizing] = useState(false);
   const wsFileIdRef = useRef<string | null>(null);
   
@@ -47,14 +66,17 @@ const WaveformSidebar: React.FC<WaveformSidebarProps> = ({ file, onUpdateSegment
     const handleMouseMove = (e: MouseEvent) => {
       if (!isResizing) return;
       
-      // Calculate new width based on mouse position from right edge of screen
-      const newWidth = window.innerWidth - e.clientX;
-      const maxWidth = window.innerWidth * 0.8;
-      const minWidth = 360;
+      const workspace = panelRef.current?.parentElement;
+      const workspaceRect = workspace?.getBoundingClientRect();
+      const workspaceRight = workspaceRect?.right ?? window.innerWidth;
+      const measuredWorkspaceWidth = workspaceRect?.width ?? (workspaceWidth || window.innerWidth);
+      const newWidth = workspaceRight - e.clientX;
+      const maxWidth = Math.min(measuredWorkspaceWidth, window.innerWidth * MAX_PANEL_WIDTH_RATIO);
+      const minWidth = Math.min(MIN_PANEL_WIDTH, maxWidth);
+      const clampedWidth = Math.min(maxWidth, Math.max(minWidth, newWidth));
 
-      if (newWidth >= minWidth && newWidth <= maxWidth) {
-        setWidth(newWidth);
-      }
+      userResizedRef.current = true;
+      setWidth(clampedWidth);
     };
 
     const handleMouseUp = () => {
@@ -73,7 +95,39 @@ const WaveformSidebar: React.FC<WaveformSidebarProps> = ({ file, onUpdateSegment
       window.removeEventListener('mouseup', handleMouseUp);
       document.body.style.cursor = 'default';
     };
-  }, [isResizing]);
+  }, [isResizing, workspaceWidth]);
+
+  useEffect(() => {
+    const workspace = panelRef.current?.parentElement;
+    if (!workspace) return;
+
+    const updateWorkspaceWidth = () => {
+      setWorkspaceWidth(workspace.clientWidth);
+      if (!hasMeasuredWorkspaceRef.current && !userResizedRef.current) {
+        hasMeasuredWorkspaceRef.current = true;
+        setWidth(getDefaultPanelWidth(workspace.clientWidth));
+      }
+    };
+
+    updateWorkspaceWidth();
+    const observer = new ResizeObserver(updateWorkspaceWidth);
+    observer.observe(workspace);
+    window.addEventListener('resize', updateWorkspaceWidth);
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', updateWorkspaceWidth);
+    };
+  }, []);
+
+  const effectiveWidth = workspaceWidth > 0 ? Math.min(width, workspaceWidth) : width;
+  const shouldOverlay = workspaceWidth > 0 && workspaceWidth - effectiveWidth < MIN_ANALYSIS_CONTENT_WIDTH;
+  const panelPlacementClass = shouldOverlay ? 'absolute right-0 top-0 bottom-0' : 'relative';
+
+  useEffect(() => {
+    if (onOverlayChange) onOverlayChange(shouldOverlay);
+    return () => onOverlayChange?.(false);
+  }, [onOverlayChange, shouldOverlay]);
 
   // Handle pinch-to-zoom (Trackpad)
   useEffect(() => {
@@ -109,6 +163,23 @@ const WaveformSidebar: React.FC<WaveformSidebarProps> = ({ file, onUpdateSegment
   const [lastSelectedId, setLastSelectedId] = useState<string | null>(null);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const lastNotifiedIdRef = useRef<string | null>(null);
+
+  const syncRegionsFromSegments = useCallback((segments: AudioSegment[]) => {
+    if (!regionsRef.current) return;
+    regionsRef.current.clearRegions();
+    segments.forEach((seg) => {
+      const colorIndex = Math.abs(seg.speaker.length) % SPEAKER_COLORS.length;
+      regionsRef.current!.addRegion({
+        id: seg.id,
+        start: seg.start,
+        end: seg.end,
+        content: seg.speaker,
+        color: SPEAKER_COLORS[colorIndex],
+        drag: true,
+        resize: true,
+      });
+    });
+  }, []);
 
   // Handle external selection (from AnalysisTable)
   useEffect(() => {
@@ -168,6 +239,11 @@ const WaveformSidebar: React.FC<WaveformSidebarProps> = ({ file, onUpdateSegment
     }
   }, [file?.id, file?.segments]);
 
+  useEffect(() => {
+    if (!isReady || !regionsRef.current) return;
+    syncRegionsFromSegments(localSegments);
+  }, [isReady, localSegments, syncRegionsFromSegments]);
+
   // Initialize WaveSurfer
   useEffect(() => {
     if (!containerRef.current || !file) return;
@@ -215,27 +291,10 @@ const WaveformSidebar: React.FC<WaveformSidebarProps> = ({ file, onUpdateSegment
         
         // 如果检测到的声道数与当前配置不同，更新配置并重新初始化
         if (detectedChannels !== channelCount) {
+          setIsReady(false);
           setChannelCount(detectedChannels);
-          // 不在这里添加 regions，因为组件会重新初始化
           return;
         }
-      }
-      
-      // 添加 regions（只有在声道配置正确时才执行）
-      if (regionsRef.current && file?.segments) {
-        regionsRef.current.clearRegions();
-        file.segments.forEach((seg) => {
-          const colorIndex = Math.abs(seg.speaker.length) % SPEAKER_COLORS.length;
-          regionsRef.current!.addRegion({
-            id: seg.id,
-            start: seg.start,
-            end: seg.end,
-            content: seg.speaker,
-            color: SPEAKER_COLORS[colorIndex],
-            drag: true,
-            resize: true,
-          });
-        });
       }
     });
 
@@ -281,6 +340,7 @@ const WaveformSidebar: React.FC<WaveformSidebarProps> = ({ file, onUpdateSegment
     return () => {
       ws.destroy();
       wavesurferRef.current = null;
+      regionsRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [file?.id, channelCount]);
@@ -361,16 +421,20 @@ const WaveformSidebar: React.FC<WaveformSidebarProps> = ({ file, onUpdateSegment
           }
       }
 
-      setLocalSegments(prev => prev.map(s => 
+      const nextSegments = localSegments.map(s =>
           s.id === segmentId ? { ...s, speaker: newSpeaker } : s
-      ));
+      );
+      setLocalSegments(nextSegments);
+      if (file) onUpdateSegments(file.id, nextSegments);
       setHasUnsavedChanges(true);
   };
 
   const handleRemarkChange = (segmentId: string, newRemark: string) => {
-      setLocalSegments(prev => prev.map(s => 
+      const nextSegments = localSegments.map(s =>
           s.id === segmentId ? { ...s, remark: newRemark } : s
-      ));
+      );
+      setLocalSegments(nextSegments);
+      if (file) onUpdateSegments(file.id, nextSegments);
       setHasUnsavedChanges(true);
   };
 
@@ -559,19 +623,28 @@ const WaveformSidebar: React.FC<WaveformSidebarProps> = ({ file, onUpdateSegment
       }
   };
 
-  if (!file) {
-      return (
-          <div className="w-96 h-full border-l border-slate-200 bg-white p-6 flex flex-col items-center justify-center text-slate-400">
-              <p>选择文件以查看波形</p>
+	  if (!file) {
+	      return (
+	          <div
+	            ref={panelRef}
+	            style={{ width: effectiveWidth }}
+	            className={`${panelPlacementClass} z-20 flex h-full shrink-0 flex-col items-center justify-center border-l border-slate-200 bg-white p-6 text-center text-slate-400 shadow-[-4px_0_16px_rgba(15,23,42,0.08)]`}
+	          >
+              <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-slate-100">
+                  <Play size={20} />
+              </div>
+              <p className="text-sm font-semibold text-slate-500">选择文件以查看波形</p>
+              <p className="mt-1 text-xs leading-5">分析完成后可在这里播放音频并查看片段。</p>
           </div>
       );
   }
 
-  return (
-    <div 
-        style={{ width: `${width}px` }}
-        className="h-full border-l border-slate-200 bg-white flex flex-col shadow-xl z-10 relative flex-shrink-0 transition-none"
-    >
+	  return (
+	    <div 
+	        ref={panelRef}
+	        style={{ width: effectiveWidth }}
+	        className={`${panelPlacementClass} z-20 flex h-full shrink-0 flex-col border-l border-slate-200 bg-white shadow-[-4px_0_16px_rgba(15,23,42,0.08)] transition-none`}
+	    >
       {/* Resize Handle */}
       <div
         className="absolute left-0 top-0 bottom-0 w-1.5 cursor-ew-resize hover:bg-[var(--psbc-green)] transition-colors z-50 -ml-0.5"
@@ -582,12 +655,12 @@ const WaveformSidebar: React.FC<WaveformSidebarProps> = ({ file, onUpdateSegment
       />
 
       {/* Header - Fixed */}
-      <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between flex-shrink-0 bg-white z-20 gap-3">
+      <div className="z-20 flex shrink-0 items-start justify-between gap-3 border-b border-slate-200 bg-white px-4 py-4">
         <div className="min-w-0">
-          <h3 className="font-semibold text-slate-900 truncate max-w-[250px]" title={file.name}>
+          <h3 className="max-w-[210px] truncate text-base font-bold leading-tight text-slate-950" title={file.name}>
             {file.name}
           </h3>
-          <p className="text-xs text-slate-500">
+          <p className="mt-1 text-xs text-slate-500">
             {isReady ? `${localSegments.length} 个片段 · ${duration.toFixed(1)}s` : '加载波形中...'}
           </p>
         </div>
@@ -604,16 +677,16 @@ const WaveformSidebar: React.FC<WaveformSidebarProps> = ({ file, onUpdateSegment
             {onReanalyze && (
                 <button 
                     onClick={() => onReanalyze(file.id)}
-                    className="tool-button px-2 py-1 text-xs"
+                    className="icon-button"
                     title="使用当前配置重新分析"
                 >
-                    <RefreshCw size={12} />
+                    <RefreshCw size={15} />
                 </button>
             )}
             {hasUnsavedChanges && (
                 <button 
                     onClick={handleSave}
-                    className="flex items-center gap-1 px-2.5 py-1.5 bg-[var(--psbc-green)] text-white text-xs rounded-lg hover:bg-[var(--psbc-green-dark)] transition-colors animate-pulse font-semibold"
+                    className="flex h-8 items-center gap-1 rounded-lg bg-[var(--psbc-green)] px-2.5 text-xs font-semibold text-white transition-colors hover:bg-[var(--psbc-green-dark)]"
                 >
                     <Save size={12} />
                     保存
@@ -621,72 +694,70 @@ const WaveformSidebar: React.FC<WaveformSidebarProps> = ({ file, onUpdateSegment
             )}
             <button onClick={onClose} className="icon-button">
                 <span className="sr-only">关闭</span>
-                &times;
+                <X size={16} />
             </button>
         </div>
       </div>
 
       {/* Player Section - Fixed/Sticky */}
-      <div className="flex-shrink-0 border-b border-slate-200 bg-slate-50/80 p-3 space-y-3 z-10">
+      <div className="z-10 shrink-0 space-y-3 border-b border-slate-200 bg-white p-3">
          {/* Combined Controls Row */}
-         <div className="flex items-center justify-between gap-3">
+         <div className="flex items-center justify-center gap-3">
             
             {/* Playback Controls */}
-            <div className="flex items-center gap-1 rounded-lg border border-slate-200 bg-white p-1 shadow-sm">
-                <button onClick={() => skip(-10)} disabled={!isReady} className="px-1.5 py-1 text-[10px] font-semibold text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded disabled:opacity-30" title="后退10秒">-10s</button>
-                <button onClick={() => skip(-5)} disabled={!isReady} className="p-1 text-slate-600 hover:bg-slate-100 rounded disabled:opacity-50" title="后退5秒"><SkipBack size={16} /></button>
-                <button onClick={() => skip(-1)} disabled={!isReady} className="px-1.5 py-1 text-[10px] font-semibold text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded disabled:opacity-30" title="后退1秒">-1s</button>
+            <div className="flex items-center gap-3">
+                <button onClick={() => skip(-10)} disabled={!isReady} className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-800 disabled:opacity-30" title="后退10秒"><SkipBack size={17} /></button>
+                <button onClick={() => skip(-1)} disabled={!isReady} className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-800 disabled:opacity-30" title="后退1秒"><span className="text-xs font-bold">-1</span></button>
                 
                 <button 
                     onClick={togglePlay} 
                     disabled={!isReady}
-                    className="w-8 h-8 bg-[var(--psbc-green)] hover:bg-[var(--psbc-green-dark)] text-white rounded-md flex items-center justify-center shadow-sm transition-transform hover:scale-105 disabled:bg-slate-300 disabled:scale-100 mx-1 shrink-0"
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--psbc-green)] text-white shadow-sm transition-transform hover:scale-105 hover:bg-[var(--psbc-green-dark)] disabled:scale-100 disabled:bg-slate-300"
                 >
                     {isPlaying ? <Pause size={16} fill="currentColor" /> : <Play size={16} fill="currentColor" className="ml-0.5" />}
                 </button>
 
-                <button onClick={() => skip(1)} disabled={!isReady} className="px-1.5 py-1 text-[10px] font-semibold text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded disabled:opacity-30" title="快进1秒">+1s</button>
-                <button onClick={() => skip(5)} disabled={!isReady} className="p-1 text-slate-600 hover:bg-slate-100 rounded disabled:opacity-50" title="快进5秒"><SkipForward size={16} /></button>
-                <button onClick={() => skip(10)} disabled={!isReady} className="px-1.5 py-1 text-[10px] font-semibold text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded disabled:opacity-30" title="快进10秒">+10s</button>
+                <button onClick={() => skip(1)} disabled={!isReady} className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-800 disabled:opacity-30" title="快进1秒"><span className="text-xs font-bold">+1</span></button>
+                <button onClick={() => skip(10)} disabled={!isReady} className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-800 disabled:opacity-30" title="快进10秒"><SkipForward size={17} /></button>
             </div>
+        </div>
 
             {/* Tools */}
-            <div className="flex items-center gap-1.5 shrink-0">
+            <div className="grid grid-cols-3 gap-2">
                 <button 
                     onClick={addRegionAtCurrentTime}
                     disabled={!isReady}
-                    className="tool-button px-2 py-1.5 text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="tool-button h-8 px-2 text-xs disabled:cursor-not-allowed disabled:opacity-50"
                     title="添加片段"
                 >
                     <Scissors size={14} />
-                    <span className="hidden sm:inline">添加</span>
+                    添加
                 </button>
                 <button 
                     onClick={handleMergeSegments}
                     disabled={!isReady || selectedSegments.size < 2}
-                    className="tool-button px-2 py-1.5 text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="tool-button h-8 px-2 text-xs disabled:cursor-not-allowed disabled:opacity-50"
                     title="按住 Ctrl/Cmd 多选，Shift 连选"
                 >
                     <Merge size={14} />
-                    <span className="hidden sm:inline">合并</span>
+                    合并
                     {selectedSegments.size > 1 && <span>({selectedSegments.size})</span>}
                 </button>
                 <button 
                     onClick={handleDeleteSelected}
                     disabled={!isReady || selectedSegments.size === 0}
-                    className="tool-button px-2 py-1.5 text-xs text-red-600 hover:border-red-300 hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="tool-button h-8 px-2 text-xs text-red-600 hover:border-red-300 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
                     title="删除选中片段"
                 >
                     <Trash2 size={14} />
-                    <span className="hidden sm:inline">删除</span>
+                    删除
                     {selectedSegments.size > 0 && <span>({selectedSegments.size})</span>}
                 </button>
             </div>
-        </div>
 
         {/* Waveform Container */}
-        <div className="bg-white rounded-lg border border-slate-200 p-2 relative group shadow-sm">
-            <div className="mb-2 flex items-center justify-between text-[11px] text-slate-500">
+        <div className="group relative rounded-lg border border-slate-200 bg-white p-2 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+            <div className="mb-2 flex items-center justify-between text-[11px] font-medium text-slate-500">
                 <span className="font-mono">{currentTime.toFixed(1)}s / {duration.toFixed(1)}s</span>
                 <span>{Math.round(zoom)} px/s</span>
             </div>
@@ -704,12 +775,12 @@ const WaveformSidebar: React.FC<WaveformSidebarProps> = ({ file, onUpdateSegment
             
             {/* Loading Overlay */}
             {!isReady && (
-                <div className="absolute inset-0 flex items-center justify-center bg-white/70 z-10">
+                <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/70">
                     <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-[var(--psbc-green)]"></div>
                 </div>
             )}
 
-            <div className="absolute top-9 right-3 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1 bg-white/90 rounded-lg shadow-sm border border-slate-200 backdrop-blur-sm z-20">
+            <div className="absolute right-3 top-9 z-20 flex gap-1 rounded-lg border border-slate-200 bg-white/90 opacity-0 shadow-sm backdrop-blur-sm transition-opacity group-hover:opacity-100">
                  <button onClick={() => setZoom(prev => Math.max(10, Math.floor(prev * 0.8)))} className="p-1.5 hover:text-[var(--psbc-green)]" title="缩小"><ZoomOut size={16}/></button>
                  <button onClick={() => setZoom(prev => Math.min(1000, Math.ceil(prev * 1.2)))} className="p-1.5 hover:text-[var(--psbc-green)]" title="放大"><ZoomIn size={16}/></button>
             </div>
@@ -717,8 +788,8 @@ const WaveformSidebar: React.FC<WaveformSidebarProps> = ({ file, onUpdateSegment
       </div>
 
       {/* Segment List (Scrollable) */}
-      <div className="flex-1 overflow-y-auto p-3 space-y-2 bg-white min-h-0">
-            <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider flex justify-between items-center sticky top-0 bg-white py-2 z-10 border-b border-slate-100">
+      <div className="min-h-0 flex-1 space-y-2 overflow-y-auto bg-slate-50/60 p-3">
+            <h4 className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-100 bg-slate-50/95 py-2 text-xs font-bold text-slate-700 backdrop-blur">
                 片段列表
                 <span className="text-xs font-normal normal-case text-slate-400">
                     {localSegments.length} 个
@@ -729,7 +800,7 @@ const WaveformSidebar: React.FC<WaveformSidebarProps> = ({ file, onUpdateSegment
                     key={seg.id}
                     id={`segment-item-${seg.id}`}
                     onClick={(e) => handleSegmentClick(seg.id, e)}
-                    className={`p-2.5 rounded-lg text-sm border cursor-pointer hover:shadow-sm transition-all flex items-center gap-3 group scroll-mt-10
+                    className={`group flex cursor-pointer scroll-mt-10 items-center gap-3 rounded-lg border p-2.5 text-sm transition-all hover:shadow-sm
                         ${selectedSegments.has(seg.id) || activeSegmentId === seg.id
                             ? 'border-[var(--psbc-green)] bg-[var(--psbc-green-soft)] ring-1 ring-[var(--psbc-green-line)]' 
                             : 'border-slate-100 bg-white hover:border-slate-200'}`}

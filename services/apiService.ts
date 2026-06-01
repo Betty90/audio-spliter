@@ -1,4 +1,4 @@
-import { AudioSegment, AppSettings } from '../types';
+import { AudioSegment, AppSettings, ConversionSettings } from '../types';
 
 let cachedPort: number | null = null;
 let portPromise: Promise<number> | null = null;
@@ -205,11 +205,24 @@ export const exportSegmentWithOptions = async (
 export const convertAudio = async (
   file: File,
   outputFormat: string,
+  conversionSettings?: Partial<ConversionSettings>,
   settings?: AppSettings
 ): Promise<Blob> => {
   const formData = new FormData();
   formData.append('file', file);
   formData.append('target_format', outputFormat);
+  formData.append('targetFormat', outputFormat);
+
+  if (conversionSettings) {
+    formData.append('video_codec', conversionSettings.videoCodec || 'source');
+    formData.append('resolution', conversionSettings.resolution || 'source');
+    formData.append('frame_rate', conversionSettings.frameRate || 'source');
+    formData.append('video_bitrate', conversionSettings.videoBitrate || 'source');
+    formData.append('audio_codec', conversionSettings.audioCodec || 'source');
+    formData.append('sample_rate', conversionSettings.sampleRate || 'source');
+    formData.append('channels', conversionSettings.channels || 'source');
+    formData.append('audio_bitrate', conversionSettings.audioBitrate || 'source');
+  }
 
   const backendUrl = await getApiBaseUrl(settings);
 
