@@ -322,18 +322,37 @@ class RedesignInterfacesTest(unittest.TestCase):
         self.assertIn("if (!isReady || !regionsRef.current) return", waveform)
         self.assertIn("syncRegionsFromSegments(localSegments)", waveform)
 
+    def test_waveform_uses_ephemeral_object_url_for_wavesurfer(self):
+        waveform = read("components/WaveformSidebar.tsx")
+
+        self.assertIn("const waveformUrl = URL.createObjectURL(file.file)", waveform)
+        self.assertIn("url: waveformUrl", waveform)
+        self.assertIn("URL.revokeObjectURL(waveformUrl)", waveform)
+        self.assertNotIn("url: file.blobUrl", waveform)
+        self.assertIn("}, [file?.id, file?.file, file?.blobUrl, channelCount]);", waveform)
+
+    def test_waveform_ignores_stale_wavesurfer_ready_events(self):
+        waveform = read("components/WaveformSidebar.tsx")
+
+        self.assertIn("if (wavesurferRef.current !== ws || wsFileIdRef.current !== waveformFileId) return", waveform)
+        self.assertIn("if (wavesurferRef.current === ws) {", waveform)
+
     def test_waveform_sidebar_compacts_controls_and_segment_rows(self):
         waveform = read("components/WaveformSidebar.tsx")
 
         self.assertNotIn("个片段 ·", waveform)
         self.assertIn("justify-between gap-2", waveform)
-        self.assertIn("flex flex-1 items-center gap-1.5", waveform)
-        self.assertIn("className=\"tool-button h-8 flex-1", waveform)
+        self.assertIn("const toolGroupClass = hideToolLabels", waveform)
+        self.assertIn("flex min-w-0 flex-1 items-center", waveform)
+        self.assertIn("const toolButtonClass = hideToolLabels", waveform)
+        self.assertIn("tool-button whitespace-nowrap", waveform)
+        self.assertIn("!hideToolLabels &&", waveform)
         self.assertNotIn("sticky top-0", waveform)
-        self.assertIn("rounded-lg border px-2.5 py-1.5", waveform)
-        self.assertIn("seg.start.toFixed(2)}s - {seg.end.toFixed(2)}s", waveform)
-        self.assertIn("(seg.end - seg.start).toFixed(2)}s", waveform)
-        self.assertIn("w-[82px]", waveform)
+        self.assertIn("rounded-lg border px-2 py-1.5", waveform)
+        self.assertIn("title={`${seg.start.toFixed(2)}s - ${seg.end.toFixed(2)}s", waveform)
+        self.assertIn("(seg.end - seg.start).toFixed(2)}s`}", waveform)
+        self.assertIn("{seg.start.toFixed(1)}-{seg.end.toFixed(1)}s", waveform)
+        self.assertIn("w-[72px]", waveform)
         self.assertIn("displaySidebarSpeakerName", waveform)
         self.assertIn("displaySidebarSpeakerHint", waveform)
         self.assertIn("speakerLabels[speaker]?.trim() || speaker", waveform)

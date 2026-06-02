@@ -143,6 +143,18 @@ const WaveformSidebar: React.FC<WaveformSidebarProps> = ({ file, onUpdateSegment
   const effectiveWidth = workspaceWidth > 0 ? Math.min(width, workspaceWidth) : width;
   const shouldOverlay = workspaceWidth > 0 && workspaceWidth - effectiveWidth < MIN_ANALYSIS_CONTENT_WIDTH;
   const panelPlacementClass = shouldOverlay ? 'absolute right-0 top-0 bottom-0' : 'relative';
+  const isCompactToolRow = effectiveWidth < 460;
+  const hideToolLabels = effectiveWidth < 400;
+  const playbackButtonClass = 'h-[22px] w-[22px] rounded-md';
+  const playButtonClass = 'h-[30px] w-[30px]';
+  const playbackIconSize = 13;
+  const playIconSize = 13;
+  const toolButtonClass = hideToolLabels
+    ? 'h-8 w-8 flex-none p-0'
+    : `h-8 min-w-0 flex-1 ${isCompactToolRow ? 'gap-0.5 px-1 text-[11px] leading-none' : 'px-2 text-xs'}`;
+  const toolGroupClass = hideToolLabels
+    ? 'ml-auto flex shrink-0 items-center justify-end gap-0.5'
+    : `flex min-w-0 flex-1 items-center ${isCompactToolRow ? 'gap-0.5' : 'gap-1.5'}`;
 
   useEffect(() => {
     if (onOverlayChange) onOverlayChange(shouldOverlay);
@@ -279,7 +291,9 @@ const WaveformSidebar: React.FC<WaveformSidebarProps> = ({ file, onUpdateSegment
     if (!containerRef.current || !file) return;
 
     setIsReady(false);
-    wsFileIdRef.current = file.id;
+    const waveformFileId = file.id;
+    const waveformUrl = URL.createObjectURL(file.file);
+    wsFileIdRef.current = waveformFileId;
 
     const ws = WaveSurfer.create({
       container: containerRef.current,
@@ -289,7 +303,7 @@ const WaveformSidebar: React.FC<WaveformSidebarProps> = ({ file, onUpdateSegment
       barWidth: 2,
       barGap: 3,
       height: channelCount > 1 ? 160 : 240,
-      url: file.blobUrl,
+      url: waveformUrl,
       minPxPerSec: zoom,
       autoScroll: true,
       autoCenter: true,
@@ -308,8 +322,12 @@ const WaveformSidebar: React.FC<WaveformSidebarProps> = ({ file, onUpdateSegment
 
     const wsRegions = RegionsPlugin.create();
     ws.registerPlugin(wsRegions);
+    wavesurferRef.current = ws;
+    regionsRef.current = wsRegions;
 
     ws.on('ready', () => {
+      if (wavesurferRef.current !== ws || wsFileIdRef.current !== waveformFileId) return;
+
       setIsReady(true);
       setDuration(ws.getDuration());
       
@@ -364,16 +382,16 @@ const WaveformSidebar: React.FC<WaveformSidebarProps> = ({ file, onUpdateSegment
       setLastSelectedId(region.id);
     });
 
-    wavesurferRef.current = ws;
-    regionsRef.current = wsRegions;
-
     return () => {
       ws.destroy();
-      wavesurferRef.current = null;
-      regionsRef.current = null;
+      URL.revokeObjectURL(waveformUrl);
+      if (wavesurferRef.current === ws) {
+        wavesurferRef.current = null;
+        regionsRef.current = null;
+      }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [file?.id, channelCount]);
+  }, [file?.id, file?.file, file?.blobUrl, channelCount]);
 
   // Handle Zoom updates
   useEffect(() => {
@@ -734,52 +752,52 @@ const WaveformSidebar: React.FC<WaveformSidebarProps> = ({ file, onUpdateSegment
          <div className="flex items-center justify-between gap-2">
             
             {/* Playback Controls */}
-            <div className="flex items-center gap-1.5">
-                <button onClick={() => skip(-10)} disabled={!isReady} className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-800 disabled:opacity-30" title="后退10秒"><SkipBack size={17} /></button>
-                <button onClick={() => skip(-1)} disabled={!isReady} className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-800 disabled:opacity-30" title="后退1秒"><span className="text-xs font-bold">-1</span></button>
+            <div className="flex shrink-0 items-center gap-0.5">
+                <button onClick={() => skip(-10)} disabled={!isReady} className={`flex items-center justify-center text-slate-500 hover:bg-slate-100 hover:text-slate-800 disabled:opacity-30 ${playbackButtonClass}`} title="后退10秒"><SkipBack size={playbackIconSize} /></button>
+                <button onClick={() => skip(-1)} disabled={!isReady} className={`flex items-center justify-center text-slate-500 hover:bg-slate-100 hover:text-slate-800 disabled:opacity-30 ${playbackButtonClass}`} title="后退1秒"><span className="whitespace-nowrap text-[10px] font-bold leading-none">-1</span></button>
                 
                 <button 
                     onClick={togglePlay} 
                     disabled={!isReady}
-                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--psbc-green)] text-white shadow-sm transition-transform hover:scale-105 hover:bg-[var(--psbc-green-dark)] disabled:scale-100 disabled:bg-slate-300"
+                    className={`flex shrink-0 items-center justify-center rounded-full bg-[var(--psbc-green)] text-white shadow-sm transition-transform hover:scale-105 hover:bg-[var(--psbc-green-dark)] disabled:scale-100 disabled:bg-slate-300 ${playButtonClass}`}
                 >
-                    {isPlaying ? <Pause size={16} fill="currentColor" /> : <Play size={16} fill="currentColor" className="ml-0.5" />}
+                    {isPlaying ? <Pause size={playIconSize} fill="currentColor" /> : <Play size={playIconSize} fill="currentColor" className="ml-0.5" />}
                 </button>
 
-                <button onClick={() => skip(1)} disabled={!isReady} className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-800 disabled:opacity-30" title="快进1秒"><span className="text-xs font-bold">+1</span></button>
-                <button onClick={() => skip(10)} disabled={!isReady} className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-800 disabled:opacity-30" title="快进10秒"><SkipForward size={17} /></button>
+                <button onClick={() => skip(1)} disabled={!isReady} className={`flex items-center justify-center text-slate-500 hover:bg-slate-100 hover:text-slate-800 disabled:opacity-30 ${playbackButtonClass}`} title="快进1秒"><span className="whitespace-nowrap text-[10px] font-bold leading-none">+1</span></button>
+                <button onClick={() => skip(10)} disabled={!isReady} className={`flex items-center justify-center text-slate-500 hover:bg-slate-100 hover:text-slate-800 disabled:opacity-30 ${playbackButtonClass}`} title="快进10秒"><SkipForward size={playbackIconSize} /></button>
             </div>
 
             {/* Tools */}
-            <div className="flex flex-1 items-center gap-1.5">
+            <div className={toolGroupClass}>
                 <button 
                     onClick={addRegionAtCurrentTime}
                     disabled={!isReady}
-                    className="tool-button h-8 flex-1 px-2 text-xs disabled:cursor-not-allowed disabled:opacity-50"
+                    className={`tool-button whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-50 ${toolButtonClass}`}
                     title="添加片段"
                 >
-                    <Scissors size={14} />
-                    添加
+                    <Scissors size={14} className="shrink-0" />
+                    {!hideToolLabels && <span className="shrink-0 whitespace-nowrap">添加</span>}
                 </button>
                 <button 
                     onClick={handleMergeSegments}
                     disabled={!isReady || selectedSegments.size < 2}
-                    className="tool-button h-8 flex-1 px-2 text-xs disabled:cursor-not-allowed disabled:opacity-50"
-                    title="按住 Ctrl/Cmd 多选，Shift 连选"
+                    className={`tool-button whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-50 ${toolButtonClass}`}
+                    title={selectedSegments.size > 1 ? `合并选中片段 (${selectedSegments.size})` : '按住 Ctrl/Cmd 多选，Shift 连选'}
                 >
-                    <Merge size={14} />
-                    合并
-                    {selectedSegments.size > 1 && <span>({selectedSegments.size})</span>}
+                    <Merge size={14} className="shrink-0" />
+                    {!hideToolLabels && <span className="shrink-0 whitespace-nowrap">合并</span>}
+                    {!hideToolLabels && selectedSegments.size > 1 && <span className={isCompactToolRow ? 'hidden min-[420px]:inline' : undefined}>({selectedSegments.size})</span>}
                 </button>
                 <button 
                     onClick={handleDeleteSelected}
                     disabled={!isReady || selectedSegments.size === 0}
-                    className="tool-button h-8 flex-1 px-2 text-xs text-red-600 hover:border-red-300 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
-                    title="删除选中片段"
+                    className={`tool-button whitespace-nowrap text-red-600 hover:border-red-300 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50 ${toolButtonClass}`}
+                    title={selectedSegments.size > 0 ? `删除选中片段 (${selectedSegments.size})` : '删除选中片段'}
                 >
-                    <Trash2 size={14} />
-                    删除
-                    {selectedSegments.size > 0 && <span>({selectedSegments.size})</span>}
+                    <Trash2 size={14} className="shrink-0" />
+                    {!hideToolLabels && <span className="shrink-0 whitespace-nowrap">删除</span>}
+                    {!hideToolLabels && selectedSegments.size > 0 && <span className={isCompactToolRow ? 'hidden min-[420px]:inline' : undefined}>({selectedSegments.size})</span>}
                 </button>
             </div>
         </div>
@@ -829,7 +847,7 @@ const WaveformSidebar: React.FC<WaveformSidebarProps> = ({ file, onUpdateSegment
                     key={seg.id}
                     id={`segment-item-${seg.id}`}
                     onClick={(e) => handleSegmentClick(seg.id, e)}
-                    className={`group flex cursor-pointer scroll-mt-10 items-center gap-2 rounded-lg border px-2.5 py-1.5 text-sm shadow-[0_1px_1px_rgba(15,23,42,0.03)] transition-all hover:-translate-y-px hover:shadow-sm
+                    className={`group flex cursor-pointer scroll-mt-10 items-center gap-1.5 rounded-lg border px-2 py-1.5 text-sm shadow-[0_1px_1px_rgba(15,23,42,0.03)] transition-all hover:-translate-y-px hover:shadow-sm
                         ${selectedSegments.has(seg.id) || activeSegmentId === seg.id
                             ? 'border-[var(--psbc-green)] bg-[var(--psbc-green-soft)] ring-1 ring-[var(--psbc-green-line)]' 
                             : 'border-slate-100 bg-white hover:border-slate-200'}`}
@@ -843,13 +861,13 @@ const WaveformSidebar: React.FC<WaveformSidebarProps> = ({ file, onUpdateSegment
                         {idx + 1}
                     </div>
 
-                    <div className="flex min-w-0 flex-1 items-center gap-2">
+                    <div className="flex min-w-0 flex-1 items-center gap-1.5">
                           <select
                             value={normalizeSpeakerKey(seg.speaker)}
                             onChange={(e) => handleSpeakerChange(seg.id, e.target.value)}
                             onClick={(e) => e.stopPropagation()}
                             onFocus={() => handleSegmentFocus(seg.id)}
-                            className="h-6 w-[82px] shrink-0 rounded-md border border-transparent bg-transparent px-1 py-0 text-[12px] font-semibold text-slate-800 outline-none transition-colors hover:bg-slate-100 focus:border-[var(--psbc-green-line)] focus:bg-white focus:ring-1 focus:ring-[var(--psbc-green-soft)]"
+                            className="h-6 w-[72px] shrink-0 rounded-md border border-transparent bg-transparent px-1 py-0 text-[12px] font-semibold text-slate-800 outline-none transition-colors hover:bg-slate-100 focus:border-[var(--psbc-green-line)] focus:bg-white focus:ring-1 focus:ring-[var(--psbc-green-soft)]"
                             title={displaySidebarSpeakerName(normalizeSpeakerKey(seg.speaker), speakerLabels)}
                           >
                             {speakerOptions.map((speaker) => (
@@ -859,7 +877,7 @@ const WaveformSidebar: React.FC<WaveformSidebarProps> = ({ file, onUpdateSegment
                             ))}
                           </select>
                           {displaySidebarSpeakerHint(seg.speaker, speakerLabels) && (
-                            <span className="shrink-0 text-[11px] font-medium text-slate-400">
+                            <span className="hidden shrink-0 text-[11px] font-medium text-slate-400 min-[460px]:inline">
                               {displaySidebarSpeakerHint(seg.speaker, speakerLabels)}
                             </span>
                           )}
@@ -872,14 +890,17 @@ const WaveformSidebar: React.FC<WaveformSidebarProps> = ({ file, onUpdateSegment
                             placeholder={seg.remark || '添加备注'}
                         />
                     </div>
-                    <div className="flex shrink-0 flex-col items-end gap-1">
-                        <span className="whitespace-nowrap text-[11px] font-mono font-semibold text-slate-400">
-                            {seg.start.toFixed(2)}s - {seg.end.toFixed(2)}s · {(seg.end - seg.start).toFixed(2)}s
+                    <div className="flex shrink-0 items-center gap-1">
+                        <span
+                            className="w-[78px] truncate text-right font-mono text-[11px] font-semibold text-slate-400"
+                            title={`${seg.start.toFixed(2)}s - ${seg.end.toFixed(2)}s · ${(seg.end - seg.start).toFixed(2)}s`}
+                        >
+                            {seg.start.toFixed(1)}-{seg.end.toFixed(1)}s
                         </span>
-                        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-all">
+                        <div className="flex h-6 shrink-0 items-center gap-0.5 rounded-md bg-white/70 opacity-100 transition-all sm:opacity-0 sm:group-hover:opacity-100">
                             <button 
                                 onClick={(e) => handlePlaySegment(seg.id, e)}
-                                className="p-1 text-gray-400 hover:text-[var(--psbc-green)] hover:bg-[var(--psbc-green-soft)] rounded"
+                                className="flex h-6 w-6 items-center justify-center rounded text-gray-400 hover:bg-[var(--psbc-green-soft)] hover:text-[var(--psbc-green)]"
                                 title="播放片段"
                             >
                                 <Play size={14} />
@@ -887,7 +908,7 @@ const WaveformSidebar: React.FC<WaveformSidebarProps> = ({ file, onUpdateSegment
                             <button 
                                 onClick={(e) => handleDownloadSegment(seg.id, e)}
                                 disabled={downloadingId === seg.id}
-                                className={`p-1 rounded ${downloadingId === seg.id ? 'text-green-500' : 'text-gray-400 hover:text-green-500 hover:bg-green-50'}`}
+                                className={`flex h-6 w-6 items-center justify-center rounded ${downloadingId === seg.id ? 'text-green-500' : 'text-gray-400 hover:bg-green-50 hover:text-green-500'}`}
                                 title="导出片段"
                             >
                                 {downloadingId === seg.id ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
@@ -897,7 +918,7 @@ const WaveformSidebar: React.FC<WaveformSidebarProps> = ({ file, onUpdateSegment
                                     e.stopPropagation();
                                     handleDeleteSegment(seg.id);
                                 }}
-                                className="p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded"
+                                className="flex h-6 w-6 items-center justify-center rounded text-gray-400 hover:bg-red-50 hover:text-red-500"
                                 title="删除片段"
                             >
                                 <Trash2 size={14} />
