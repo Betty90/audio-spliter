@@ -12,6 +12,7 @@ let loadingWindow: BrowserWindow | null = null;
 
 const isDev = !app.isPackaged;
 const libraryStateFileName = 'uaudiolab-library-state.json';
+const audioLibraryDirectoryName = 'audio-library';
 
 interface SaveFileOptions {
   directory?: string;
@@ -22,6 +23,10 @@ interface SaveFileOptions {
 
 function getLibraryStatePath(): string {
   return path.join(app.getPath('userData'), libraryStateFileName);
+}
+
+function getAudioLibraryDirectory(): string {
+  return path.join(app.getPath('userData'), audioLibraryDirectoryName);
 }
 
 function safeBaseName(fileName: string): string {
@@ -37,6 +42,19 @@ async function fileReference(filePath: string) {
     size: stats.size,
     lastModified: stats.mtimeMs,
     extension: path.extname(filePath).replace('.', '').toLowerCase(),
+  };
+}
+
+async function importedFileReference(sourcePath: string) {
+  const libraryDirectory = getAudioLibraryDirectory();
+  await fsPromises.mkdir(libraryDirectory, { recursive: true });
+  const storedPath = await resolveAvailablePath(libraryDirectory, path.basename(sourcePath));
+  await fsPromises.copyFile(sourcePath, storedPath);
+  const reference = await fileReference(storedPath);
+
+  return {
+    ...reference,
+    sourcePath,
   };
 }
 
@@ -86,6 +104,34 @@ async function calculateStorageStats(targetPath?: string) {
       used: 0,
     };
   }
+}
+
+async function loadLibraryState(): Promise<unknown | null> {
+  try {
+    const raw = await fsPromises.readFile(getLibraryStatePath(), 'utf-8');
+    if (!raw.trim()) {
+      return null;
+    }
+    return JSON.parse(raw);
+  } catch (error: any) {
+    if (error?.code === 'ENOENT') {
+      return null;
+    }
+    if (error instanceof SyntaxError) {
+      logInfo(`[Main] Ignoring unreadable library state: ${error.message}`);
+      return null;
+    }
+    logError(`[Main] Failed to load library state: ${error}`);
+    return null;
+  }
+}
+
+async function saveLibraryState(state: unknown): Promise<void> {
+  const statePath = getLibraryStatePath();
+  const temporaryPath = `${statePath}.${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}.tmp`;
+  await fsPromises.mkdir(path.dirname(statePath), { recursive: true });
+  await fsPromises.writeFile(temporaryPath, JSON.stringify(state, null, 2), 'utf-8');
+  await fsPromises.rename(temporaryPath, statePath);
 }
 
 const gotTheLock = app.requestSingleInstanceLock();
@@ -289,6 +335,31 @@ app.whenReady().then(async () => {
     return Promise.all(result.filePaths.map(fileReference));
   });
 
+  ipcMain.handle('import-audio-files-to-library', async () => {
+    const options: OpenDialogOptions = {
+      properties: ['openFile', 'multiSelections'],
+      filters: [
+        {
+          name: 'Audio and video',
+          extensions: ['mp3', 'wav', 'm4a', 'aac', 'ogg', 'flac', 'mp4', 'mov', 'webm'],
+        },
+      ],
+    };
+    const result = mainWindow
+      ? await dialog.showOpenDialog(mainWindow, options)
+      : await dialog.showOpenDialog(options);
+
+    if (result.canceled) {
+      return [];
+    }
+
+    const references = [];
+    for (const filePath of result.filePaths) {
+      references.push(await importedFileReference(filePath));
+    }
+    return references;
+  });
+
   ipcMain.handle('select-output-directory', async () => {
     const options: OpenDialogOptions = {
       properties: ['openDirectory', 'createDirectory'],
@@ -328,20 +399,11 @@ app.whenReady().then(async () => {
   });
 
   ipcMain.handle('load-library-state', async () => {
-    try {
-      const raw = await fsPromises.readFile(getLibraryStatePath(), 'utf-8');
-      return JSON.parse(raw);
-    } catch (error: any) {
-      if (error?.code !== 'ENOENT') {
-        logError(`[Main] Failed to load library state: ${error}`);
-      }
-      return null;
-    }
+    return loadLibraryState();
   });
 
   ipcMain.handle('save-library-state', async (_event, state: unknown) => {
-    await fsPromises.mkdir(app.getPath('userData'), { recursive: true });
-    await fsPromises.writeFile(getLibraryStatePath(), JSON.stringify(state, null, 2), 'utf-8');
+    await saveLibraryState(state);
     return { ok: true };
   });
 

@@ -77,6 +77,7 @@ function toLibraryItem(file: AudioFile, existing?: LibraryItem): LibraryItem {
     isFavorite: file.isFavorite ?? existing?.isFavorite ?? false,
     isDeleted: file.isDeleted ?? existing?.isDeleted ?? false,
     collectionIds: file.collectionIds ?? existing?.collectionIds ?? [],
+    sourcePath: file.sourcePath || existing?.sourcePath,
     addedAt: file.addedAt || existing?.addedAt || Date.now(),
     updatedAt: Date.now(),
     lastAnalyzedAt: file.status === FileStatus.COMPLETED ? Date.now() : existing?.lastAnalyzedAt,
@@ -278,7 +279,7 @@ const App: React.FC = () => {
     addFiles(newFiles);
   }, [activeCollectionId, addFiles]);
 
-  const createAudioFileFromPath = useCallback(async (filePath: string, existing?: LibraryItem): Promise<AudioFile> => {
+  const createAudioFileFromPath = useCallback(async (filePath: string, existing?: LibraryItem, sourcePath?: string): Promise<AudioFile> => {
     if (!window.electron?.readFileAsBytes) {
       throw new Error('当前环境不支持读取本地文件路径，请在 Electron 应用中使用。');
     }
@@ -293,6 +294,7 @@ const App: React.FC = () => {
       status: existing?.segments?.length ? FileStatus.COMPLETED : FileStatus.IDLE,
       segments: existing?.segments || [],
       path: payload.path,
+      sourcePath: payload.sourcePath || sourcePath || existing?.sourcePath,
       size: payload.size,
       extension: payload.extension,
       isFavorite: existing?.isFavorite || false,
@@ -305,6 +307,13 @@ const App: React.FC = () => {
   }, [activeCollectionId]);
 
   const handleBrowseFiles = useCallback(async () => {
+    if (window.electron?.importAudioFilesToLibrary) {
+      const references = await window.electron.importAudioFilesToLibrary();
+      const loaded = await Promise.all(references.map(ref => createAudioFileFromPath(ref.path, undefined, ref.sourcePath)));
+      addFiles(loaded);
+      return;
+    }
+
     if (!window.electron?.selectAudioFiles) {
       document.getElementById('sidebar-file-upload')?.click();
       return;

@@ -17,6 +17,7 @@ class RedesignInterfacesTest(unittest.TestCase):
 
         for method in [
             "selectAudioFiles",
+            "importAudioFilesToLibrary",
             "selectOutputDirectory",
             "readFileAsBytes",
             "saveFile",
@@ -30,6 +31,7 @@ class RedesignInterfacesTest(unittest.TestCase):
 
         for channel in [
             "select-audio-files",
+            "import-audio-files-to-library",
             "select-output-directory",
             "read-file-as-bytes",
             "save-file",
@@ -39,6 +41,24 @@ class RedesignInterfacesTest(unittest.TestCase):
             "reveal-in-finder",
         ]:
             self.assertIn(channel, main)
+
+        self.assertIn("sourcePath", declarations)
+        self.assertIn("audio-library", main)
+        self.assertIn("fsPromises.copyFile", main)
+        self.assertNotIn("Promise.all(result.filePaths.map(importedFileReference))", main)
+        self.assertIn("for (const filePath of result.filePaths)", main)
+
+    def test_library_state_load_and_save_are_resilient_to_partial_writes(self):
+        main = read("electron/main.ts")
+
+        self.assertIn("async function loadLibraryState()", main)
+        self.assertIn("raw.trim()", main)
+        self.assertIn("SyntaxError", main)
+        self.assertIn("return null", main)
+        self.assertIn("async function saveLibraryState(state: unknown)", main)
+        self.assertIn("const temporaryPath = `${statePath}.${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}.tmp`", main)
+        self.assertIn("fsPromises.rename(temporaryPath, statePath)", main)
+        self.assertNotIn("fsPromises.writeFile(getLibraryStatePath(), JSON.stringify(state, null, 2), 'utf-8')", main)
 
     def test_backend_conversion_supports_allow_listed_advanced_options(self):
         backend = read("backend/server.py")
@@ -67,6 +87,7 @@ class RedesignInterfacesTest(unittest.TestCase):
 
         self.assertIn("interface LibraryCollection", types)
         self.assertIn("collectionIds", types)
+        self.assertIn("sourcePath?: string", types)
         self.assertIn("collections:", types)
         self.assertIn("onCreateLibrary", sidebar)
         self.assertIn("onMoveToLibrary", sidebar)
@@ -79,6 +100,9 @@ class RedesignInterfacesTest(unittest.TestCase):
         self.assertIn("handleMoveToLibrary", app)
         self.assertIn("handleRestoreFile", app)
         self.assertIn("handlePermanentDeleteFile", app)
+        self.assertIn("sourcePath: file.sourcePath || existing?.sourcePath", app)
+        self.assertIn("sourcePath: payload.sourcePath", app)
+        self.assertIn("window.electron.importAudioFilesToLibrary", app)
 
     def test_sidebar_library_creation_and_file_list_cleanup(self):
         sidebar = read("components/AudioFileSidebar.tsx")

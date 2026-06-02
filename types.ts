@@ -55,6 +55,7 @@ export interface AudioFile {
   duration?: number;
   size?: number;
   path?: string;
+  sourcePath?: string;
   extension?: string;
   isFavorite?: boolean;
   isDeleted?: boolean;
@@ -69,6 +70,7 @@ export interface LibraryItem {
   id: string;
   name: string;
   path: string;
+  sourcePath?: string;
   size: number;
   duration?: number;
   extension: string;

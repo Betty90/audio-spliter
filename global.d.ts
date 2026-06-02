@@ -5,6 +5,7 @@ declare global {
     electron?: {
       getPythonPort: () => Promise<number>;
       selectAudioFiles: () => Promise<ElectronFileReference[]>;
+      importAudioFilesToLibrary: () => Promise<ElectronFileReference[]>;
       selectOutputDirectory: () => Promise<string | null>;
       readFileAsBytes: (filePath: string) => Promise<ElectronFileBytes>;
       saveFile: (options: ElectronSaveFileOptions) => Promise<ElectronSavedFile>;
@@ -18,6 +19,7 @@ declare global {
 
   interface ElectronFileReference {
     path: string;
+    sourcePath?: string;
     name: string;
     size: number;
     lastModified: number;
