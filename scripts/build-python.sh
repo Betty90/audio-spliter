@@ -85,7 +85,7 @@ $PYTHON -m pip install --upgrade pyinstaller
 
 echo ""
 echo -e "${YELLOW}Step 2: Verifying Python dependencies...${NC}"
-REQUIRED_PACKAGES="flask librosa numpy scikit-learn soundfile scipy audioread"
+REQUIRED_PACKAGES="flask numpy soundfile onnxruntime kaldi-native-fbank"
 
 for package in $REQUIRED_PACKAGES; do
     if $PYTHON -c "import ${package//-/_}" 2>/dev/null; then

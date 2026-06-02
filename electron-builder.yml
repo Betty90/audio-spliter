@@ -22,9 +22,6 @@ mac:
     - target: dmg
       arch:
         - arm64
-    - target: zip
-      arch:
-        - arm64
   hardenedRuntime: true
   gatekeeperAssess: false
   entitlements: assets/entitlements.mac.plist

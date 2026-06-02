@@ -4,7 +4,7 @@ PyInstaller spec file for AudioSlicer AI Flask backend
 Generated: 2026-03-23
 
 This spec packages the Python Flask backend into a standalone executable
-with all dependencies (librosa, sklearn, scipy, etc.) and FFmpeg binary.
+with the ONNX audio analysis runtime, bundled models, and FFmpeg binary.
 
 Usage:
     pyinstaller backend/server.spec
@@ -19,6 +19,7 @@ import os
 import sys
 from PyInstaller.building.build_main import Analysis, PYZ, EXE, COLLECT, BUNDLE
 from PyInstaller.building.datastruct import Tree
+from PyInstaller.utils.hooks import collect_data_files, collect_dynamic_libs
 
 # Determine platform
 IS_WINDOWS = sys.platform.startswith('win')
@@ -59,150 +60,40 @@ FFMPEG_ALTERNATIVE_PATHS = [
 if IS_WINDOWS:
     FFMPEG_ALTERNATIVE_PATHS = [p.replace('/', os.sep).replace('ffmpeg', 'ffmpeg.exe') for p in FFMPEG_ALTERNATIVE_PATHS]
 
-# Hidden imports - these are dynamically imported and need explicit inclusion
+# Hidden imports - keep this list narrow so PyInstaller does not pull optional ML frameworks.
 hiddenimports = [
-    # Flask and Werkzeug
-    'flask',
-    'flask.cli',
-    'werkzeug',
-    'jinja2',
-    'markupsafe',
-    'itsdangerous',
-    'click',
-    
-    # NumPy - critical for scientific computing
-    'numpy',
-    'numpy.core._dtype_ctypes',
-    'numpy.core._multiarray_tests',
-    'numpy.core._multiarray_umath',
-    'numpy.linalg.lapack_lite',
-    'numpy.random.common',
-    'numpy.random.bounded_integers',
-    'numpy.random.entropy',
-    
-    # SciPy - signal processing
-    'scipy',
-    'scipy.signal',
-    'scipy.ndimage',
-    'scipy.ndimage._nd_image',
-    'scipy.ndimage._ni_label',
-    'scipy.ndimage._ni_support',
-    'scipy.special',
-    'scipy.special._ufuncs',
-    'scipy.special._ufuncs_cxx',
-    'scipy.special.specfun',
-    
-    # Scikit-learn - machine learning
-    'sklearn',
-    'sklearn.cluster',
-    'sklearn.cluster._kmeans',
-    'sklearn.mixture',
-    'sklearn.mixture._gaussian_mixture',
-    'sklearn.preprocessing',
-    'sklearn.preprocessing._data',
-    'sklearn.utils',
-    'sklearn.utils._cython_blas',
-    'sklearn.utils._heap',
-    'sklearn.utils._logistic_sigmoid',
-    'sklearn.utils._random',
-    'sklearn.utils._sorting',
-    'sklearn.utils._weight_vector',
-    'sklearn.utils.extmath',
-    'sklearn.utils.fixes',
-    'sklearn.utils.sparsefuncs',
-    'sklearn.utils.validation',
-    'sklearn.neighbors',
-    'sklearn.neighbors._quad_tree',
-    'sklearn.tree',
-    'sklearn.tree._utils',
-    
-    # Librosa - audio processing
-    'librosa',
-    'librosa.core',
-    'librosa.core.audio',
-    'librosa.core.spectrum',
-    'librosa.core.constantq',
-    'librosa.core.pitch',
-    'librosa.feature',
-    'librosa.feature.spectral',
-    'librosa.feature.rhythm',
-    'librosa.feature.utils',
-    'librosa.filters',
-    'librosa.util',
-    'librosa.util.decorators',
-    'librosa.util.exceptions',
-    'librosa.util.files',
-    'librosa.util.matching',
-    'librosa.util.utils',
-    'librosa.effects',
-    'librosa.beat',
-    'librosa.decompose',
-    'librosa.display',
-    'librosa.onset',
-    'librosa.segment',
-    'librosa.sequence',
-    
-    # SoundFile - audio I/O
-    'soundfile',
-    '_soundfile_data',
-    
-    # Audioread - audio decoding
-    'audioread',
-    'audioread.rawread',
-    'audioread.ffdec',
-    'audioread.maddec',
-    'audioread.gstdec',
-    'audioread.macca',
-    
-    # Resampy (used by librosa for resampling)
-    'resampy',
-    'resampy.core',
-    'resampy.filters',
-    'resampy.interpn',
-    
-    # Numba (used by librosa for JIT compilation)
-    'numba',
-    'numba.core',
-    'numba.core.codegen',
-    'numba.core.compiler',
-    'numba.core.registry',
-    'numba.core.typing',
-    'numba.np',
-    'numba.np.arraymath',
-    'numba.np.linalg',
-    'numba.np.random',
-    
-    # Joblib (used by sklearn)
-    'joblib',
-    'joblib.externals',
-    'joblib.externals.cloudpickle',
-    'joblib.externals.loky',
-    
-    # Threading and multiprocessing
-    'threading',
-    'multiprocessing',
-    'multiprocessing.pool',
-    'multiprocessing.process',
-    'multiprocessing.queues',
-    'multiprocessing.reduction',
-    'multiprocessing.resource_tracker',
-    'multiprocessing.sharedctypes',
-    'multiprocessing.spawn',
-    'multiprocessing.synchronize',
-    'multiprocessing.util',
-    
-    # Platform-specific
-    'uuid',
-    'tempfile',
-    'mimetypes',
-    'logging.handlers',
+    "flask",
+    "flask.cli",
+    "werkzeug",
+    "jinja2",
+    "markupsafe",
+    "itsdangerous",
+    "click",
+    "numpy",
+    "soundfile",
+    "_soundfile_data",
+    "onnxruntime",
+    "onnxruntime.capi",
+    "onnxruntime.capi.onnxruntime_pybind11_state",
+    "kaldi_native_fbank",
+    "neural_diarization",
+    "uuid",
+    "tempfile",
+    "mimetypes",
+    "logging.handlers",
+    "multiprocessing",
+    "multiprocessing.resource_tracker",
 ]
 
 # Binary files to include
 binaries = []
+binaries += collect_dynamic_libs('onnxruntime')
+binaries += collect_dynamic_libs('kaldi_native_fbank')
 
 # Data files to include
 datas = []
+datas += collect_data_files('onnxruntime')
+datas += collect_data_files('kaldi_native_fbank')
 
 # Include FFmpeg binary if it exists
 if os.path.exists(FFMPEG_BINARY):
@@ -219,11 +110,12 @@ soundfile_path = os.path.dirname(soundfile.__file__)
 if os.path.exists(os.path.join(soundfile_path, '_soundfile_data')):
     datas.append((os.path.join(soundfile_path, '_soundfile_data'), '_soundfile_data'))
 
-# Add sklearn datasets if needed (for any data files)
-import sklearn
-sklearn_path = os.path.dirname(sklearn.__file__)
-if os.path.exists(os.path.join(sklearn_path, 'datasets')):
-    datas.append((os.path.join(sklearn_path, 'datasets'), 'sklearn/datasets'))
+# Include bundled neural analysis models
+models_dir = os.path.join(PROJECT_ROOT, 'backend', 'models')
+if os.path.exists(models_dir):
+    datas.append((models_dir, 'models'))
+else:
+    print(f"WARNING: Neural model directory not found at {models_dir}")
 
 # Analysis configuration
 a = Analysis(
@@ -257,6 +149,21 @@ a = Analysis(
         'notebook',
         'sphinx',
         'pytest',
+        'torch',
+        'tensorflow',
+        'onnx',
+        'cupy',
+        'dask',
+        'librosa',
+        'sklearn',
+        'scipy',
+        'numba',
+        'llvmlite',
+        'resampy',
+        'audioread',
+        'pandas',
+        'sympy',
+        'pydantic',
         # Note: unittest is needed by numpy.testing, do not exclude
         # 'unittest',
         'test',

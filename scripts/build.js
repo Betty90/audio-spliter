@@ -175,6 +175,8 @@ async function packageApp() {
 
   if (process.argv.includes('--publish')) {
     args.push('--publish', 'always');
+  } else {
+    args.push('--publish', 'never');
   }
 
   if (process.argv.includes('--mac')) {

@@ -9,17 +9,12 @@ import signal
 import sys
 
 from flask import Flask, request, jsonify, send_file
-import librosa
-import numpy as np
-from sklearn.cluster import KMeans
-from sklearn.mixture import GaussianMixture
-from sklearn.preprocessing import StandardScaler
-import soundfile as sf
-import io
-from scipy.signal import medfilt
-from scipy.ndimage import gaussian_filter1d
 import traceback
-import audioread
+
+try:
+    from backend.neural_diarization import process_audio_neural
+except ImportError:
+    from neural_diarization import process_audio_neural
 
 # Configure logging
 logging.basicConfig(
@@ -38,7 +33,7 @@ def add_cors_headers(response):
 
 
 # --- FFmpeg Configuration ---
-# Find ffmpeg binary and add to PATH for librosa/audioread
+# Find ffmpeg binary and add to PATH for bundled conversion/decoding
 def setup_ffmpeg():
     ffmpeg_path = "ffmpeg"  # Default to system ffmpeg
 
@@ -80,7 +75,7 @@ def setup_ffmpeg():
 
     if found_path:
         logging.info(f"Found ffmpeg at: {found_path}")
-        # Add directory to PATH so librosa/audioread can find it
+        # Add directory to PATH so subprocess-based decoding can find it
         ffmpeg_dir = os.path.dirname(found_path)
         os.environ["PATH"] += os.pathsep + ffmpeg_dir
 
@@ -206,328 +201,6 @@ def build_convert_command(ffmpeg_path, input_path, output_path, form):
     return cmd, target_format
 
 
-def _unique_cluster_count(labels):
-    return len(set(int(label) for label in labels))
-
-
-def cluster_audio_features(features, n_clusters):
-    try:
-        gmm = GaussianMixture(
-            n_components=n_clusters,
-            covariance_type="diag",
-            n_init=5,
-            random_state=42,
-        )
-        labels = gmm.fit_predict(features)
-        if n_clusters > 1 and _unique_cluster_count(labels) < 2:
-            logging.warning(
-                "GMM collapsed to one timbre label despite requested clusters; falling back to KMeans"
-            )
-            raise ValueError("GMM collapsed to one cluster")
-        return labels
-    except Exception as gmm_err:
-        logging.warning(f"GMM failed ({gmm_err}), falling back to KMeans")
-        kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init=10)
-        return kmeans.fit_predict(features)
-
-
-def smooth_labels_preserving_clusters(labels, smoothing_width, n_clusters):
-    kernel_size = smoothing_width if smoothing_width % 2 == 1 else smoothing_width + 1
-    if kernel_size <= 1:
-        return labels
-
-    smoothed_labels = medfilt(labels, kernel_size=kernel_size)
-    raw_count = _unique_cluster_count(labels)
-    smoothed_count = _unique_cluster_count(smoothed_labels)
-
-    if n_clusters > 1 and raw_count > 1 and smoothed_count < 2:
-        logging.warning(
-            "Median smoothing collapsed speaker labels; keeping unsmoothed labels to preserve timbre diversity"
-        )
-        return labels
-
-    return smoothed_labels
-
-
-def process_audio(
-    file_path,
-    n_clusters=2,
-    min_duration=0.5,
-    silence_thresh=0.005,
-    hop_length=512,
-    smoothing_width=5,
-    sample_rate=16000,
-    min_silence_duration=0.1,
-):
-    """
-    使用 Librosa 提取 MFCC 特征，并使用 K-Means 聚类进行说话人区分。
-    这是一个轻量级的机器学习方案，不需要 GPU。
-    """
-    try:
-        logging.info(
-            f"开始处理文件: {file_path}, 聚类数: {n_clusters}, hop_length: {hop_length}, smoothing: {smoothing_width}, sr: {sample_rate}, min_silence: {min_silence_duration}"
-        )
-
-        # 1. 加载音频
-        try:
-            y, sr = librosa.load(file_path, sr=sample_rate)
-        except Exception as load_err:
-            logging.error(f"Librosa load failed: {load_err}")
-
-            # Check for NoBackendError specifically
-            if "NoBackendError" in str(type(load_err).__name__):
-                logging.error("FFmpeg backend not found by audioread.")
-
-            # Try loading with soundfile directly if librosa fails (sometimes faster/better for wav)
-            try:
-                data, samplerate = sf.read(file_path)
-                # Resample if needed
-                if samplerate != sample_rate:
-                    y = librosa.resample(
-                        y=data.T, orig_sr=samplerate, target_sr=sample_rate
-                    )
-                    sr = sample_rate
-                else:
-                    y = data.T
-                    sr = sample_rate
-                # If stereo, convert to mono
-                if len(y.shape) > 1:
-                    y = librosa.to_mono(y)
-            except Exception as sf_err:
-                logging.error(f"Soundfile load failed: {sf_err}")
-                raise ValueError(
-                    f"无法加载音频文件 (可能是格式不支持或 FFmpeg 未安装): {str(load_err)}"
-                )
-
-        duration = librosa.get_duration(y=y, sr=sr)
-        logging.info(f"音频时长: {duration:.2f}s")
-
-        if duration < min_duration:
-            logging.warning(f"音频过短 ({duration:.2f}s < {min_duration}s)，跳过处理")
-            return []
-
-        # 2. 特征提取 (MFCCs + Deltas)
-        # 预加重 (Pre-emphasis) - 增强高频部分，有助于语音识别
-        y_pre = librosa.effects.preemphasis(y)
-
-        # hop_length 决定了时间分辨率。16k 采样率下 512 大约是 32ms 一个窗口
-        # 增加 MFCC 系数到 20 以捕获更多细节
-        n_mfcc = 20
-
-        mfcc = librosa.feature.mfcc(
-            y=y_pre, sr=sr, n_mfcc=n_mfcc, hop_length=hop_length
-        )
-        # 计算一阶差分 (Delta)
-        mfcc_delta = librosa.feature.delta(mfcc)
-        # 计算二阶差分 (Delta-Delta)
-        mfcc_delta2 = librosa.feature.delta(mfcc, order=2)
-
-        # 计算均方根能量 (RMS) 用于静音检测
-        rms = librosa.feature.rms(y=y, hop_length=hop_length)[0]
-
-        # 堆叠特征: (3 * n_mfcc, n_samples)
-        combined_features = np.vstack([mfcc, mfcc_delta, mfcc_delta2])
-
-        # 转置矩阵形状为 (样本数, 特征数) 以适配 sklearn
-        features = combined_features.T
-
-        # Check if we have enough samples for clustering
-        n_samples = features.shape[0]
-        if n_samples == 0:
-            logging.warning("No features extracted.")
-            return []
-
-        if n_samples < n_clusters:
-            logging.warning(
-                f"样本数 ({n_samples}) 小于聚类数 ({n_clusters})，自动调整聚类数。"
-            )
-            n_clusters = max(1, n_samples)
-
-        # 3. 数据标准化 (Standardization)
-        # 对聚类算法非常重要
-        scaler = StandardScaler()
-        scaled_features = scaler.fit_transform(features)
-
-        # 3.1 特征平滑 (Feature Smoothing)
-        # 在聚类之前对特征进行时间上的平滑，这相当于引入了上下文信息
-        # sigma=2 大约对应 2-3 个帧的平滑窗口
-        smoothed_features = gaussian_filter1d(scaled_features, sigma=2, axis=0)
-
-        # 4. 聚类 (GMM - Gaussian Mixture Model)
-        # GMM 比 K-Means 更适合说话人识别，因为它能更好地模拟每个说话人的特征分布（方差）
-        # n_init=5 尝试多次初始化以避免局部最优
-        labels = cluster_audio_features(smoothed_features, n_clusters)
-
-        # 4.1 平滑标签 (Median Filter)
-        # 使用中值滤波去除短暂的跳变
-        labels = smooth_labels_preserving_clusters(labels, smoothing_width, n_clusters)
-
-        # 5. 将帧标签转换为时间片段
-        segments = []
-        current_label = None
-        start_frame = 0
-
-        # 辅助函数：帧转秒
-        frames_to_time = lambda f: librosa.frames_to_time(
-            f, sr=sr, hop_length=hop_length
-        )
-
-        # Pre-calculate silence mask
-        is_silent_mask = rms < silence_thresh
-
-        # Apply min_silence_duration logic:
-        # If a silence segment is shorter than min_silence_duration, treat it as non-silence (ignore it)
-        # However, we don't know what speaker it belongs to.
-        # Strategy:
-        # 1. Identify runs of silence.
-        # 2. If run length < min_frames, set is_silent_mask[run] = False.
-
-        min_silence_frames = int(min_silence_duration * sr / hop_length)
-        logging.info(
-            f"Min silence duration: {min_silence_duration}s -> {min_silence_frames} frames"
-        )
-
-        silence_runs_found = 0
-        silence_runs_filled = 0
-
-        if min_silence_frames > 0:
-            # Find runs of True in is_silent_mask
-            run_start = -1
-            for i in range(len(is_silent_mask)):
-                if is_silent_mask[i]:
-                    if run_start == -1:
-                        run_start = i
-                else:
-                    if run_start != -1:
-                        silence_runs_found += 1
-                        run_length = i - run_start
-                        if run_length < min_silence_frames:
-                            silence_runs_filled += 1
-                            # Too short, revert to False
-                            is_silent_mask[run_start:i] = False
-                            # Fill with previous label if available
-                            if run_start > 0:
-                                labels[run_start:i] = labels[run_start - 1]
-                            # If no previous label (start of file), fill with next label
-                            elif i < len(labels):
-                                labels[run_start:i] = labels[i]
-                        run_start = -1
-            # Check last run
-            if run_start != -1:
-                silence_runs_found += 1
-                run_length = len(is_silent_mask) - run_start
-                if run_length < min_silence_frames:
-                    silence_runs_filled += 1
-                    is_silent_mask[run_start:] = False
-                    if run_start > 0:
-                        labels[run_start:] = labels[run_start - 1]
-
-        logging.info(
-            f"Silence filling: Found {silence_runs_found} runs, Filled {silence_runs_filled} runs"
-        )
-
-        segments_dropped_duration = 0
-
-        for i, label in enumerate(labels):
-            # 使用处理后的静音掩码
-            is_silent = is_silent_mask[i]
-
-            # 如果是静音，标记为 -1，否则使用聚类标签
-            effective_label = -1 if is_silent else label
-
-            # 状态发生变化（换人说话 或 开始/结束静音）
-            if effective_label != current_label:
-                if current_label is not None:
-                    # 结束上一段
-                    end_time = frames_to_time(i)
-                    start_time = frames_to_time(start_frame)
-
-                    # 只有当时长超过阈值才记录
-                    if (end_time - start_time) >= min_duration:
-                        # -1 代表噪音/静音
-                        speaker_name = (
-                            "噪音/静音"
-                            if current_label == -1
-                            else f"音色 {int(current_label) + 1}"
-                        )
-
-                        # 仅保留非静音片段（如果需要保留静音，去掉这个 if 即可）
-                        if current_label != -1:
-                            segments.append(
-                                {
-                                    "speaker": speaker_name,
-                                    "start": float(f"{start_time:.2f}"),
-                                    "end": float(f"{end_time:.2f}"),
-                                }
-                            )
-                    else:
-                        segments_dropped_duration += 1
-                        # logging.debug(f"Dropped short segment: {start_time:.2f}-{end_time:.2f} ({end_time-start_time:.2f}s) Label: {current_label}")
-
-                # 开始新的一段
-                current_label = effective_label
-                start_frame = i
-
-        # 处理最后一段
-        end_time = duration
-        start_time = frames_to_time(start_frame)
-        if (end_time - start_time) >= min_duration and current_label != -1:
-            segments.append(
-                {
-                    "speaker": f"音色 {int(current_label) + 1}",
-                    "start": float(f"{start_time:.2f}"),
-                    "end": float(f"{end_time:.2f}"),
-                }
-            )
-        elif (end_time - start_time) < min_duration:
-            segments_dropped_duration += 1
-
-        logging.info(
-            f"处理完成，生成 {len(segments)} 个片段. Dropped {segments_dropped_duration} segments due to min_duration."
-        )
-
-        # 6. 后处理：合并同一说话人的相邻片段，如果间隔小于 min_silence_duration
-        # 这可以解决由于短暂噪音或被丢弃的短片段导致的断裂
-        if len(segments) > 0:
-            merged_segments = []
-            current_seg = segments[0]
-
-            for next_seg in segments[1:]:
-                # 检查是否同一说话人
-                if current_seg["speaker"] == next_seg["speaker"]:
-                    # 检查间隔
-                    gap = next_seg["start"] - current_seg["end"]
-                    # 使用 min_silence_duration 作为允许的最大合并间隔
-                    # 注意：浮点数比较可能需要一点容差，但这里直接比较通常没问题
-                    if gap < min_silence_duration:
-                        # 合并：延长当前片段的结束时间
-                        current_seg["end"] = next_seg["end"]
-                        logging.info(
-                            f"Merged segments of {current_seg['speaker']} with gap {gap:.2f}s"
-                        )
-                        continue
-
-                # 如果不能合并，保存当前片段，并切换到下一个
-                merged_segments.append(current_seg)
-                current_seg = next_seg
-
-            # 添加最后一个片段
-            merged_segments.append(current_seg)
-
-            if len(segments) != len(merged_segments):
-                logging.info(
-                    f"Post-processing merged {len(segments) - len(merged_segments)} gaps."
-                )
-
-            segments = merged_segments
-
-        return segments
-
-    except Exception as e:
-        logging.error(f"处理音频时出错: {e}", exc_info=True)
-        raise e
-
-
 @app.route("/convert", methods=["POST"])
 def convert_audio():
     if "file" not in request.files:
@@ -636,15 +309,11 @@ def upload_file():
         logging.info(f"接收文件: {filename}")
         file.save(filepath)
 
-        # 调用核心处理逻辑
-        segments = process_audio(
+        # 调用核心处理逻辑：内置 Silero VAD + 3D-Speaker CAM++ ONNX
+        segments = process_audio_neural(
             filepath,
             n_clusters=n_speakers,
             min_duration=min_duration,
-            silence_thresh=noise_threshold,
-            hop_length=hop_length,
-            smoothing_width=smoothing_width,
-            sample_rate=sample_rate,
             min_silence_duration=min_silence_duration,
         )
 

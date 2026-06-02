@@ -1,7 +1,5 @@
 flask
-librosa
 numpy
-scikit-learn
 soundfile
-audioread
-scipy
+onnxruntime
+kaldi-native-fbank
