@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Archive,
+  ChevronRight,
   Check,
   Clock3,
   FileAudio,
@@ -113,6 +114,7 @@ const AudioFileSidebar: React.FC<AudioFileSidebarProps> = ({
 }) => {
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [isCreatingLibrary, setIsCreatingLibrary] = useState(false);
+  const [isCustomLibrariesCollapsed, setIsCustomLibrariesCollapsed] = useState(false);
   const [newLibraryName, setNewLibraryName] = useState('');
   const liveIds = new Set(files.map(file => file.id));
   const mergedItems = [
@@ -184,6 +186,14 @@ const AudioFileSidebar: React.FC<AudioFileSidebarProps> = ({
     setIsCreatingLibrary(false);
   };
 
+  useEffect(() => {
+    if (!openMenuId) return;
+
+    const handleDocumentMouseDown = () => setOpenMenuId(null);
+    document.addEventListener('mousedown', handleDocumentMouseDown);
+    return () => document.removeEventListener('mousedown', handleDocumentMouseDown);
+  }, [openMenuId]);
+
   return (
     <aside className="flex h-full w-[224px] shrink-0 flex-col border-r border-slate-200 bg-white">
       <div className="flex h-[68px] items-center gap-3 border-b border-slate-200 px-4">
@@ -222,7 +232,14 @@ const AudioFileSidebar: React.FC<AudioFileSidebarProps> = ({
         <div className="mb-2 flex items-center justify-between px-1">
           <span className="text-[12px] font-semibold leading-none text-slate-600">文件库</span>
           <div className="flex items-center gap-1">
-            <button onClick={() => setIsCreatingLibrary(true)} className="icon-button h-6 w-6" title="新建文件库">
+            <button
+              onClick={() => {
+                setIsCustomLibrariesCollapsed(false);
+                setIsCreatingLibrary(true);
+              }}
+              className="icon-button h-6 w-6"
+              title="新建文件库"
+            >
               <Plus size={14} />
             </button>
             <button onClick={onOpenGlobalSettings} className="icon-button h-6 w-6" title="分析设置">
@@ -252,8 +269,19 @@ const AudioFileSidebar: React.FC<AudioFileSidebarProps> = ({
           })}
         </div>
         <div className="mt-2 border-t border-slate-100 pt-2">
-          <div className="mb-1 px-1 text-[10.5px] font-semibold text-slate-400">自定义文件库</div>
-          {isCreatingLibrary && (
+          <button
+            type="button"
+            onClick={() => setIsCustomLibrariesCollapsed(prev => !prev)}
+            aria-expanded={!isCustomLibrariesCollapsed}
+            className="mb-1 flex h-6 w-full items-center justify-between rounded-md px-1 text-[10.5px] font-semibold text-slate-400 hover:bg-slate-50 hover:text-slate-600"
+          >
+            <span>自定义文件库</span>
+            <span className="flex items-center gap-1">
+              <span>{collections.length}</span>
+              <ChevronRight size={12} className={`transition-transform ${isCustomLibrariesCollapsed ? '' : 'rotate-90'}`} />
+            </span>
+          </button>
+          {!isCustomLibrariesCollapsed && isCreatingLibrary && (
             <div className="mb-1 flex h-7 items-center gap-1 rounded-md border border-[var(--psbc-green-line)] bg-white px-1.5">
               <input
                 value={newLibraryName}
@@ -274,7 +302,8 @@ const AudioFileSidebar: React.FC<AudioFileSidebarProps> = ({
               </button>
             </div>
           )}
-          <div className="space-y-0.5">
+          {!isCustomLibrariesCollapsed && (
+          <div data-testid="custom-library-scroll" className="max-h-[150px] overflow-y-auto space-y-0.5 pr-0.5">
             {collections.length === 0 ? (
               <button
                 onClick={() => setIsCreatingLibrary(true)}
@@ -317,6 +346,7 @@ const AudioFileSidebar: React.FC<AudioFileSidebarProps> = ({
               );
             })}
           </div>
+          )}
         </div>
       </section>
 
@@ -374,6 +404,7 @@ const AudioFileSidebar: React.FC<AudioFileSidebarProps> = ({
                         </div>
                       </div>
                       <button
+                        onMouseDown={(event) => event.stopPropagation()}
                         onClick={(event) => {
                           event.stopPropagation();
                           setOpenMenuId(openMenuId === item.id ? null : item.id);
@@ -403,6 +434,7 @@ const AudioFileSidebar: React.FC<AudioFileSidebarProps> = ({
                     {openMenuId === item.id && (
                       <div
                         className="absolute right-2 top-8 z-30 w-40 rounded-lg border border-slate-200 bg-white p-1 text-[11px] shadow-lg"
+                        onMouseDown={(event) => event.stopPropagation()}
                         onClick={(event) => event.stopPropagation()}
                       >
                         {activeCategory === 'trash' ? (
@@ -437,11 +469,13 @@ const AudioFileSidebar: React.FC<AudioFileSidebarProps> = ({
                             <button onClick={() => { onMoveToLibrary(item.id, null); setOpenMenuId(null); }} className="flex h-7 w-full items-center gap-2 rounded-md px-2 text-left text-slate-700 hover:bg-slate-50">
                               <Archive size={12} /> 未分组
                             </button>
-                            {collections.map(collection => (
-                              <button key={collection.id} onClick={() => { onMoveToLibrary(item.id, collection.id); setOpenMenuId(null); }} className="flex h-7 w-full items-center gap-2 rounded-md px-2 text-left text-slate-700 hover:bg-slate-50">
-                                <Folder size={12} /> <span className="truncate">{collection.name}</span>
-                              </button>
-                            ))}
+                            <div data-testid="move-library-scroll" className="max-h-[132px] overflow-y-auto pr-0.5">
+                              {collections.map(collection => (
+                                <button key={collection.id} onClick={() => { onMoveToLibrary(item.id, collection.id); setOpenMenuId(null); }} className="flex h-7 w-full items-center gap-2 rounded-md px-2 text-left text-slate-700 hover:bg-slate-50">
+                                  <Folder size={12} /> <span className="truncate">{collection.name}</span>
+                                </button>
+                              ))}
+                            </div>
                             <div className="my-1 border-t border-slate-100" />
                             <button onClick={() => { onDelete(item.id); setOpenMenuId(null); }} className="flex h-7 w-full items-center gap-2 rounded-md px-2 text-left text-red-600 hover:bg-red-50">
                               <Trash2 size={12} /> 移到回收站

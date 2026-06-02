@@ -6,8 +6,10 @@ export interface ConfirmConfig {
   title: string;
   message: string;
   confirmText?: string;
+  secondaryConfirmText?: string;
   cancelText?: string;
   onConfirm: () => void;
+  onSecondaryConfirm?: () => void;
 }
 
 interface ConfirmDialogProps {
@@ -27,13 +29,24 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({ config, onClose }) => {
             <h3 className="text-lg font-semibold text-gray-900">{config.title}</h3>
           </div>
           <p className="text-gray-600 text-sm mb-6">{config.message}</p>
-          <div className="flex justify-end gap-3">
+          <div className="flex flex-wrap justify-end gap-2">
             <button 
               onClick={onClose} 
               className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
             >
               {config.cancelText || '取消'}
             </button>
+            {config.onSecondaryConfirm && (
+              <button
+                onClick={() => {
+                  config.onSecondaryConfirm?.();
+                  onClose();
+                }}
+                className="px-4 py-2 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"
+              >
+                {config.secondaryConfirmText || '确认删除记录'}
+              </button>
+            )}
             <button 
               onClick={() => { 
                 config.onConfirm(); 

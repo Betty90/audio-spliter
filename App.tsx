@@ -415,38 +415,58 @@ const App: React.FC = () => {
     setActiveCollectionId(nextCollection.id);
   }, [conversionSettings, libraryItems, outputPolicy, persistState]);
 
-  const handleDeleteLibrary = useCallback((collectionId: string) => {
+  const handleDeleteLibrary = useCallback((collectionId: string, deleteRecords = false) => {
     const collection = collections.find(item => item.id === collectionId);
     if (!collection) return;
+
+    const removeLibrary = (shouldDeleteRecords: boolean) => {
+      const nextCollections = collections.filter(item => item.id !== collectionId);
+      const now = Date.now();
+      const collectionRecordIds = new Set([
+        ...libraryItems.filter(item => item.collectionIds.includes(collectionId)).map(item => item.id),
+        ...files.filter(file => file.collectionIds?.includes(collectionId)).map(file => file.id),
+      ]);
+      const nextLibrary = shouldDeleteRecords
+        ? libraryItems.filter(item => !collectionRecordIds.has(item.id))
+        : libraryItems.map(item => ({
+            ...item,
+            collectionIds: item.collectionIds.filter(id => id !== collectionId),
+            updatedAt: item.collectionIds.includes(collectionId) ? now : item.updatedAt,
+          }));
+
+      setCollections(nextCollections);
+      setLibraryItems(nextLibrary);
+      setFiles(prev => shouldDeleteRecords ? prev.filter(file => !file.collectionIds?.includes(collectionId) && !collectionRecordIds.has(file.id)) : prev.map(file => ({
+        ...file,
+        collectionIds: (file.collectionIds || []).filter(id => id !== collectionId),
+        updatedAt: file.collectionIds?.includes(collectionId) ? now : file.updatedAt,
+      })));
+      setSelectedFileId(prev => {
+        if (!shouldDeleteRecords) return prev;
+        return prev && collectionRecordIds.has(prev) ? null : prev;
+      });
+      if (activeCollectionId === collectionId) {
+        setActiveCollectionId(null);
+        setActiveCategory('all');
+      }
+      persistState(nextLibrary, outputPolicy, conversionSettings, nextCollections);
+    };
+
+    if (deleteRecords) {
+      removeLibrary(true);
+      return;
+    }
 
     setConfirmConfig({
       isOpen: true,
       title: '删除文件库',
-      message: `确定要删除“${collection.name}”吗？删除文件库只会移除这个自定义库，不会删除库内文件或本地原文件。`,
+      message: `确定要删除“${collection.name}”吗？删除文件库只会移除这个自定义库，不会删除库内文件或本地原文件；也可以选择同时彻底删除库内应用记录。`,
       confirmText: '删除文件库',
-      onConfirm: () => {
-        const nextCollections = collections.filter(item => item.id !== collectionId);
-        const nextLibrary = libraryItems.map(item => ({
-          ...item,
-          collectionIds: item.collectionIds.filter(id => id !== collectionId),
-          updatedAt: item.collectionIds.includes(collectionId) ? Date.now() : item.updatedAt,
-        }));
-
-        setCollections(nextCollections);
-        setLibraryItems(nextLibrary);
-        setFiles(prev => prev.map(file => ({
-          ...file,
-          collectionIds: (file.collectionIds || []).filter(id => id !== collectionId),
-          updatedAt: file.collectionIds?.includes(collectionId) ? Date.now() : file.updatedAt,
-        })));
-        if (activeCollectionId === collectionId) {
-          setActiveCollectionId(null);
-          setActiveCategory('all');
-        }
-        persistState(nextLibrary, outputPolicy, conversionSettings, nextCollections);
-      },
+      secondaryConfirmText: '删除库和记录',
+      onConfirm: () => removeLibrary(false),
+      onSecondaryConfirm: () => handleDeleteLibrary(collectionId, true),
     });
-  }, [activeCollectionId, collections, conversionSettings, libraryItems, outputPolicy, persistState]);
+  }, [activeCollectionId, collections, conversionSettings, files, libraryItems, outputPolicy, persistState]);
 
   const handleMoveToLibrary = useCallback((fileId: string, collectionId: string | null) => {
     const nextIds = collectionId ? [collectionId] : [];

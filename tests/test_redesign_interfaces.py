@@ -123,10 +123,35 @@ class RedesignInterfacesTest(unittest.TestCase):
 
         self.assertIn("onDeleteLibrary", sidebar)
         self.assertIn("删除文件库", sidebar)
-        self.assertIn("handleDeleteLibrary = useCallback((collectionId: string)", app)
+        self.assertIn("handleDeleteLibrary = useCallback((collectionId: string, deleteRecords = false)", app)
         self.assertIn("filter(id => id !== collectionId)", app)
         self.assertIn("删除文件库只会移除这个自定义库", app)
+        self.assertIn("collectionRecordIds", app)
+        self.assertIn("shouldDeleteRecords ? prev.filter(file => !file.collectionIds?.includes(collectionId) && !collectionRecordIds.has(file.id))", app)
+        self.assertIn("!collectionRecordIds.has(file.id)", app)
+        self.assertIn("secondaryConfirmText: '删除库和记录'", app)
+        self.assertIn("onSecondaryConfirm", app)
         self.assertIn("onDeleteLibrary={handleDeleteLibrary}", app)
+
+    def test_sidebar_custom_libraries_and_move_menu_are_bounded(self):
+        sidebar = read("components/AudioFileSidebar.tsx")
+
+        self.assertIn("max-h-[150px] overflow-y-auto", sidebar)
+        self.assertIn("max-h-[132px] overflow-y-auto pr-0.5", sidebar)
+        self.assertIn("data-testid=\"custom-library-scroll\"", sidebar)
+        self.assertIn("data-testid=\"move-library-scroll\"", sidebar)
+
+    def test_sidebar_menus_close_outside_and_custom_libraries_collapse(self):
+        sidebar = read("components/AudioFileSidebar.tsx")
+
+        self.assertIn("useEffect", sidebar)
+        self.assertIn("document.addEventListener('mousedown', handleDocumentMouseDown)", sidebar)
+        self.assertIn("setOpenMenuId(null)", sidebar)
+        self.assertIn("isCustomLibrariesCollapsed", sidebar)
+        self.assertIn("setIsCustomLibrariesCollapsed", sidebar)
+        self.assertIn("自定义文件库", sidebar)
+        self.assertIn("aria-expanded={!isCustomLibrariesCollapsed}", sidebar)
+        self.assertIn("!isCustomLibrariesCollapsed &&", sidebar)
 
     def test_global_form_font_rule_does_not_override_tailwind_text_utilities(self):
         styles = read("src/styles.css")
