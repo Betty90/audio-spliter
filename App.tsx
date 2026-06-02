@@ -47,6 +47,7 @@ const EMPTY_OUTPUT_POLICY: OutputPolicy = {
 const ANALYSIS_CONTENT_WIDTH = 800;
 
 type AnalysisRowMode = string;
+type PendingWorkspaceFile = AudioFile & { requestId: string };
 
 function makeId(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
@@ -130,7 +131,9 @@ const App: React.FC = () => {
   const [files, setFiles] = useState<AudioFile[]>([]);
   const [libraryItems, setLibraryItems] = useState<LibraryItem[]>([]);
   const [collections, setCollections] = useState<LibraryCollection[]>([]);
-  const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
+  const [selectedAnalyzerFileId, setSelectedAnalyzerFileId] = useState<string | null>(null);
+  const [pendingSplitterFile, setPendingSplitterFile] = useState<PendingWorkspaceFile | null>(null);
+  const [pendingConverterFile, setPendingConverterFile] = useState<PendingWorkspaceFile | null>(null);
   const [activeSegmentId, setActiveSegmentId] = useState<string | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isLabOpen, setIsLabOpen] = useState(false);
@@ -140,6 +143,7 @@ const App: React.FC = () => {
   const [isAnalysisSidebarOverlaying, setIsAnalysisSidebarOverlaying] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [backendHealthy, setBackendHealthy] = useState<boolean>(true);
+  const [hasLoadedPersistedState, setHasLoadedPersistedState] = useState(false);
   const [outputPolicy, setOutputPolicy] = useState<OutputPolicy>(EMPTY_OUTPUT_POLICY);
   const [conversionSettings, setConversionSettings] = useState<ConversionSettings>(DEFAULT_CONVERSION_SETTINGS);
   const [confirmConfig, setConfirmConfig] = useState<ConfirmConfig>({
@@ -149,7 +153,12 @@ const App: React.FC = () => {
     onConfirm: () => {},
   });
 
-  const activeFile = files.find(f => f.id === selectedFileId) || null;
+  const selectedFileId = activeTab === 'analyzer' ? selectedAnalyzerFileId : null;
+  const activeFile = files.find(f => f.id === selectedAnalyzerFileId) || null;
+
+  const clearSelectedAnalyzerFile = useCallback((fileId: string) => {
+    setSelectedAnalyzerFileId(prev => prev === fileId ? null : prev);
+  }, []);
 
   const persistState = useCallback((
     nextLibrary: LibraryItem[],
@@ -186,28 +195,34 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const loadPersistedState = async () => {
-      if (!window.electron?.loadLibraryState) return;
-      const persisted = await window.electron.loadLibraryState() as PersistedAppState | null;
-      const downloads = await window.electron.getDownloadsDirectory?.();
-      const nextOutput = persisted?.outputPolicy || { ...EMPTY_OUTPUT_POLICY, directory: downloads || '' };
-      setLibraryItems(persisted?.library || []);
-      setCollections(persisted?.collections || []);
-      setOutputPolicy(nextOutput);
-      setConversionSettings(persisted?.conversionSettings || DEFAULT_CONVERSION_SETTINGS);
-      setActiveCategory(persisted?.activeCategory || 'all');
-      setActiveCollectionId(persisted?.activeCollectionId || null);
+      try {
+        if (!window.electron?.loadLibraryState) return;
+        const persisted = await window.electron.loadLibraryState() as PersistedAppState | null;
+        const downloads = await window.electron.getDownloadsDirectory?.();
+        const nextOutput = persisted?.outputPolicy || { ...EMPTY_OUTPUT_POLICY, directory: downloads || '' };
+        setLibraryItems(persisted?.library || []);
+        setCollections(persisted?.collections || []);
+        setOutputPolicy(nextOutput);
+        setConversionSettings(persisted?.conversionSettings || DEFAULT_CONVERSION_SETTINGS);
+        setActiveCategory(persisted?.activeCategory || 'all');
+        setActiveCollectionId(persisted?.activeCollectionId || null);
+      } finally {
+        setHasLoadedPersistedState(true);
+      }
     };
 
     loadPersistedState().catch(error => console.error('Failed to load persisted state', error));
   }, []);
 
   useEffect(() => {
+    if (!hasLoadedPersistedState) return;
     persistState(libraryItems);
-  }, [activeCategory, activeCollectionId, collections, libraryItems, persistState]);
+  }, [activeCategory, activeCollectionId, collections, hasLoadedPersistedState, libraryItems, persistState]);
 
   useEffect(() => {
+    if (!hasLoadedPersistedState) return;
     persistState(libraryItems, outputPolicy, conversionSettings);
-  }, [conversionSettings, libraryItems, outputPolicy, persistState]);
+  }, [conversionSettings, hasLoadedPersistedState, libraryItems, outputPolicy, persistState]);
 
   const checkHealth = useCallback(async () => {
     try {
@@ -236,7 +251,6 @@ const App: React.FC = () => {
         upsertLibraryItem(next);
         return next;
       }));
-      setSelectedFileId(prev => prev || file.id);
     } catch (err: any) {
       const message = err.message || '分析失败';
       setFiles(prev => prev.map(f => {
@@ -255,11 +269,14 @@ const App: React.FC = () => {
       return [...prev, ...newFiles.filter(file => !existingIds.has(file.id))];
     });
     newFiles.forEach(upsertLibraryItem);
-    setSelectedFileId(newFiles[0].id);
+    if (activeTab === 'analyzer') {
+      setSelectedAnalyzerFileId(newFiles[0].id);
+      setActiveSegmentId(null);
+    }
     if (shouldAnalyze) {
       newFiles.forEach(file => analyze(file, file.settings || settings));
     }
-  }, [analyze, settings, upsertLibraryItem]);
+  }, [activeTab, analyze, settings, upsertLibraryItem]);
 
   const handleFileUpload = useCallback((fileList: FileList | null) => {
     if (!fileList || fileList.length === 0) return;
@@ -324,24 +341,47 @@ const App: React.FC = () => {
     addFiles(loaded);
   }, [addFiles, createAudioFileFromPath]);
 
-  const handleSelectLibraryItem = useCallback(async (itemId: string) => {
+  const loadLibraryAudioFile = useCallback(async (itemId: string): Promise<AudioFile | null> => {
     const alreadyLoaded = files.find(file => file.id === itemId);
     if (alreadyLoaded) {
-      setSelectedFileId(itemId);
-      return;
+      return alreadyLoaded;
     }
 
     const item = libraryItems.find(entry => entry.id === itemId);
-    if (!item?.path) return;
+    if (!item?.path) return null;
 
     try {
       const loaded = await createAudioFileFromPath(item.path, item);
       addFiles([loaded], !item.segments?.length);
-      setSelectedFileId(loaded.id);
+      return loaded;
     } catch (error: any) {
       setLibraryItems(prev => prev.map(entry => entry.id === itemId ? { ...entry, status: 'error', error: error.message } : entry));
+      return null;
     }
   }, [addFiles, createAudioFileFromPath, files, libraryItems]);
+
+  const routeWorkspaceFile = useCallback((file: AudioFile) => {
+    if (activeTab === 'analyzer') {
+      setSelectedAnalyzerFileId(file.id);
+      setActiveSegmentId(null);
+      return;
+    }
+    if (activeTab === 'splitter') {
+      setPendingSplitterFile({ ...file, requestId: makeId('splitter-add') });
+      return;
+    }
+    setPendingConverterFile({ ...file, requestId: makeId('converter-add') });
+  }, [activeTab]);
+
+  const handleSelectLibraryItem = useCallback(async (itemId: string) => {
+    const file = await loadLibraryAudioFile(itemId);
+    if (file) routeWorkspaceFile(file);
+  }, [loadLibraryAudioFile, routeWorkspaceFile]);
+
+  const handleWorkspaceFileSelect = useCallback(async (fileId: string) => {
+    const file = await loadLibraryAudioFile(fileId);
+    if (file) routeWorkspaceFile(file);
+  }, [loadLibraryAudioFile, routeWorkspaceFile]);
 
   const retryFile = useCallback((fileId: string) => {
     const file = files.find(f => f.id === fileId);
@@ -365,10 +405,10 @@ const App: React.FC = () => {
           persistState(next);
           return next;
         });
-        setSelectedFileId(prev => prev === fileId ? null : prev);
+        clearSelectedAnalyzerFile(fileId);
       },
     });
-  }, [persistState]);
+  }, [clearSelectedAnalyzerFile, persistState]);
 
   const handleRestoreFile = useCallback((fileId: string) => {
     setFiles(prev => prev.map(file => file.id === fileId ? { ...file, isDeleted: false, updatedAt: Date.now() } : file));
@@ -392,10 +432,10 @@ const App: React.FC = () => {
           persistState(next);
           return next;
         });
-        setSelectedFileId(prev => prev === fileId ? null : prev);
+        clearSelectedAnalyzerFile(fileId);
       },
     });
-  }, [persistState]);
+  }, [clearSelectedAnalyzerFile, persistState]);
 
   const handleCreateLibrary = useCallback((name: string) => {
     const trimmed = name.trim();
@@ -441,10 +481,9 @@ const App: React.FC = () => {
         collectionIds: (file.collectionIds || []).filter(id => id !== collectionId),
         updatedAt: file.collectionIds?.includes(collectionId) ? now : file.updatedAt,
       })));
-      setSelectedFileId(prev => {
-        if (!shouldDeleteRecords) return prev;
-        return prev && collectionRecordIds.has(prev) ? null : prev;
-      });
+      if (shouldDeleteRecords) {
+        setSelectedAnalyzerFileId(prev => prev && collectionRecordIds.has(prev) ? null : prev);
+      }
       if (activeCollectionId === collectionId) {
         setActiveCollectionId(null);
         setActiveCategory('all');
@@ -584,7 +623,7 @@ const App: React.FC = () => {
           setActiveCategory('all');
           setActiveCollectionId(collectionId);
         }}
-        onSelectFile={setSelectedFileId}
+        onSelectFile={handleWorkspaceFileSelect}
         onSelectLibraryItem={handleSelectLibraryItem}
         onUpload={handleFileUpload}
         onBrowseFiles={handleBrowseFiles}
@@ -618,8 +657,7 @@ const App: React.FC = () => {
           {activeTab === 'converter' ? (
             <ConverterPage
               onBack={() => setActiveTab('analyzer')}
-              existingFiles={files}
-              libraryItems={libraryItems}
+              pendingFile={pendingConverterFile}
               outputPolicy={outputPolicy}
               conversionSettings={conversionSettings}
               onOutputPolicyChange={(next) => {
@@ -628,7 +666,7 @@ const App: React.FC = () => {
               onConversionSettingsChange={setConversionSettings}
             />
           ) : activeTab === 'splitter' ? (
-            <SplitterPage onBack={() => setActiveTab('analyzer')} />
+            <SplitterPage onBack={() => setActiveTab('analyzer')} pendingFile={pendingSplitterFile} />
           ) : (
             <>
               <main
@@ -691,7 +729,7 @@ const App: React.FC = () => {
               <WaveformSidebar
                 file={activeFile}
                 onUpdateSegments={handleSegmentUpdate}
-                onClose={() => setSelectedFileId(null)}
+                onClose={() => setSelectedAnalyzerFileId(null)}
                 settings={activeFile?.settings || settings}
                 activeSegmentId={activeSegmentId}
                 onSegmentSelect={setActiveSegmentId}

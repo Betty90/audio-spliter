@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   AlertCircle,
   Archive,
@@ -10,19 +10,16 @@ import {
   MoreHorizontal,
   Pause,
   Play,
-  Plus,
   RefreshCw,
   Settings2,
   Trash2,
-  Upload,
 } from 'lucide-react';
-import { AudioFile, ConversionSettings, LibraryItem, OutputPolicy } from '../types';
+import { AudioFile, ConversionSettings, OutputPolicy } from '../types';
 import { convertAudio } from '../services/apiService';
 
 interface ConverterPageProps {
   onBack: () => void;
-  existingFiles: AudioFile[];
-  libraryItems: LibraryItem[];
+  pendingFile?: (AudioFile & { requestId: string }) | null;
   outputPolicy: OutputPolicy;
   conversionSettings: ConversionSettings;
   onOutputPolicyChange: (policy: OutputPolicy) => void;
@@ -31,6 +28,7 @@ interface ConverterPageProps {
 
 interface QueueItem {
   id: string;
+  sourceId: string;
   file: File;
   sourceFormat: string;
   durationLabel: string;
@@ -72,8 +70,7 @@ function buildOutputName(item: QueueItem, policy: OutputPolicy, targetFormat: st
 }
 
 const ConverterPage: React.FC<ConverterPageProps> = ({
-  existingFiles,
-  libraryItems,
+  pendingFile,
   outputPolicy,
   conversionSettings,
   onOutputPolicyChange,
@@ -92,35 +89,27 @@ const ConverterPage: React.FC<ConverterPageProps> = ({
     return { success, failed, waiting, size };
   }, [queue]);
 
-  const addFilesToQueue = (files: File[]) => {
-    const newItems = files
-      .filter(file => !queue.some(item => item.file.name === file.name && item.file.size === file.size))
-      .map(file => ({
+  const addAudioFilesToQueue = (audioFiles: AudioFile[]) => {
+    setQueue(prev => {
+      const newItems = audioFiles
+      .filter(audioFile => !prev.some(item => item.sourceId === audioFile.id))
+      .map(audioFile => ({
         id: makeId(),
-        file,
-        sourceFormat: extensionOf(file.name),
+        sourceId: audioFile.id,
+        file: audioFile.file,
+        sourceFormat: extensionOf(audioFile.name),
         durationLabel: '--:--',
         status: 'idle' as const,
       }));
-    setQueue(prev => [...prev, ...newItems]);
+      return [...prev, ...newItems];
+    });
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      addFilesToQueue(Array.from(e.target.files));
-      e.target.value = '';
+  useEffect(() => {
+    if (pendingFile) {
+      addAudioFilesToQueue([pendingFile]);
     }
-  };
-
-  const handleAddExistingFile = (file: AudioFile) => {
-    addFilesToQueue([file.file]);
-  };
-
-  const handleAddLibraryItem = async (item: LibraryItem) => {
-    if (!item.path || !window.electron?.readFileAsBytes) return;
-    const payload = await window.electron.readFileAsBytes(item.path);
-    addFilesToQueue([new File([new Uint8Array(payload.data)], payload.name)]);
-  };
+  }, [pendingFile?.requestId]);
 
   const updateQueueItem = (id: string, patch: Partial<QueueItem>) => {
     setQueue(prev => prev.map(item => item.id === id ? { ...item, ...patch } : item));
@@ -184,11 +173,6 @@ const ConverterPage: React.FC<ConverterPageProps> = ({
     if (directory) onOutputPolicyChange({ ...outputPolicy, directory });
   };
 
-  const recentLibrary = libraryItems
-    .filter(item => !item.isDeleted)
-    .sort((a, b) => b.updatedAt - a.updatedAt)
-    .slice(0, 5);
-
   return (
     <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_312px] gap-4 overflow-hidden p-5">
       <div className="flex min-w-0 flex-col gap-4 overflow-hidden">
@@ -207,63 +191,7 @@ const ConverterPage: React.FC<ConverterPageProps> = ({
           ))}
         </div>
 
-        <div className="grid min-h-0 flex-1 grid-cols-[252px_minmax(0,1fr)] gap-4 overflow-hidden">
-          <div className="flex min-h-0 flex-col gap-4">
-            <section className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
-              <div className="mb-3 flex items-center gap-2 text-sm font-bold text-slate-800">
-                <Plus size={16} />
-                添加文件
-              </div>
-              <label className="flex h-32 cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-slate-300 bg-slate-50 text-center transition-colors hover:bg-white">
-                <Upload size={28} className="mb-2 text-slate-500" />
-                <span className="text-sm font-semibold text-slate-700">点击上传或拖拽文件到此处</span>
-                <span className="mt-1 text-xs text-slate-400">支持 MP4、M4A、WAV、MP3 等格式</span>
-                <input type="file" multiple className="hidden" onChange={handleFileChange} accept="audio/*,video/*" />
-              </label>
-              <div className="mt-3 grid grid-cols-2 gap-2">
-                <label className="tool-button cursor-pointer">
-                  <FileAudio size={15} />
-                  添加文件
-                  <input type="file" multiple className="hidden" onChange={handleFileChange} accept="audio/*,video/*" />
-                </label>
-                <button onClick={chooseOutputDirectory} className="tool-button">
-                  <Folder size={15} />
-                  输出目录
-                </button>
-              </div>
-            </section>
-
-            <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-              <div className="border-b border-slate-200 px-4 py-3 text-sm font-bold text-slate-800">最近分析文件</div>
-              <div className="min-h-0 flex-1 overflow-y-auto p-2">
-                {recentLibrary.length === 0 && existingFiles.length === 0 ? (
-                  <div className="py-8 text-center text-sm text-slate-400">暂无最近文件</div>
-                ) : (
-                  <div className="space-y-1">
-                    {existingFiles.slice(0, 4).map(file => (
-                      <button key={file.id} onClick={() => handleAddExistingFile(file)} className="flex w-full items-center gap-3 rounded-lg p-2 text-left hover:bg-slate-50">
-                        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-500"><FileAudio size={15} /></span>
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate text-xs font-bold text-slate-800">{file.name}</span>
-                          <span className="text-[11px] text-slate-500">{formatBytes(file.file.size)}</span>
-                        </span>
-                      </button>
-                    ))}
-                    {recentLibrary.map(item => (
-                      <button key={item.id} onClick={() => handleAddLibraryItem(item)} className="flex w-full items-center gap-3 rounded-lg p-2 text-left hover:bg-slate-50">
-                        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-500"><FileAudio size={15} /></span>
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate text-xs font-bold text-slate-800">{item.name}</span>
-                          <span className="text-[11px] text-slate-500">{formatBytes(item.size)}</span>
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </section>
-          </div>
-
+        <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)] overflow-hidden">
           <section className="flex min-w-0 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
             <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
               <div className="flex items-center gap-2 text-sm font-bold text-slate-800">

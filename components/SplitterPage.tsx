@@ -1,10 +1,11 @@
-import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { Upload, FileAudio, Play, Pause, Square, ZoomIn, ZoomOut, Download, Repeat, X, AlertCircle } from 'lucide-react';
-import { ACCEPTED_MIME_TYPES } from '../constants';
+import React, { useState, useRef, useEffect } from 'react';
+import { FileAudio, Play, Pause, Square, ZoomIn, ZoomOut, Download, Repeat, X, AlertCircle } from 'lucide-react';
 import { exportSegmentWithOptions } from '../services/apiService';
+import { AudioFile } from '../types';
 
 interface SplitterPageProps {
   onBack: () => void;
+  pendingFile?: (AudioFile & { requestId: string }) | null;
 }
 
 interface AudioRegion {
@@ -20,7 +21,7 @@ type DragState =
   | { type: 'resize-left'; regionId: string }
   | { type: 'resize-right'; regionId: string };
 
-const SplitterPage: React.FC<SplitterPageProps> = ({ onBack }) => {
+const SplitterPage: React.FC<SplitterPageProps> = ({ onBack, pendingFile }) => {
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -55,11 +56,31 @@ const SplitterPage: React.FC<SplitterPageProps> = ({ onBack }) => {
   const [channelData, setChannelData] = useState<Float32Array[]>([]);
   const [error, setError] = useState<string | null>(null);
 
-  const handleFileUpload = async (fileList: FileList | null) => {
-    if (!fileList || fileList.length === 0) return;
-    
-    const file = fileList[0];
-    
+  const clearLoadedAudio = () => {
+    setAudioUrl(prev => {
+      if (prev) URL.revokeObjectURL(prev);
+      return null;
+    });
+    setAudioFile(null);
+    setAudioBuffer(null);
+    setChannelData([]);
+    setDuration(0);
+    setRegions([]);
+    setSelectedRegionId(null);
+    setCurrentTime(0);
+    setIsPlaying(false);
+  };
+
+  const loadAudioFile = async (sourceFile: AudioFile | null) => {
+    clearLoadedAudio();
+
+    if (!sourceFile) {
+      setError(null);
+      return;
+    }
+
+    const file = sourceFile.file;
+
     const maxSize = 500 * 1024 * 1024;
     if (file.size > maxSize) {
       setError('文件大小超过500MB限制');
@@ -88,15 +109,7 @@ const SplitterPage: React.FC<SplitterPageProps> = ({ onBack }) => {
     
     setError(null);
     setAudioFile(file);
-    setRegions([]);
-    setSelectedRegionId(null);
-    setCurrentTime(0);
-    setIsPlaying(false);
-    
-    if (audioUrl) {
-      URL.revokeObjectURL(audioUrl);
-    }
-    
+
     const url = URL.createObjectURL(file);
     setAudioUrl(url);
     setIsLoading(true);
@@ -122,6 +135,10 @@ const SplitterPage: React.FC<SplitterPageProps> = ({ onBack }) => {
       setIsLoading(false);
     }
   };
+
+  useEffect(() => {
+    loadAudioFile(pendingFile || null);
+  }, [pendingFile?.requestId]);
 
   // Playback controls
   const togglePlayback = () => {
@@ -647,39 +664,10 @@ const SplitterPage: React.FC<SplitterPageProps> = ({ onBack }) => {
         </div>
         
         <div className="flex items-center gap-2">
-          {!audioFile ? (
-            <button
-              onClick={() => document.getElementById('splitter-file-upload')?.click()}
-              className="flex items-center gap-2 px-4 py-2 bg-[var(--psbc-green)] hover:bg-[var(--psbc-green-dark)] text-white rounded-lg font-medium transition-colors"
-            >
-              <Upload size={16} />
-              上传音频
-              <input
-                id="splitter-file-upload"
-                type="file"
-                accept={Object.values(ACCEPTED_MIME_TYPES).flat().join(',')}
-                className="hidden"
-                onChange={(e) => handleFileUpload(e.target.files)}
-              />
-            </button>
-          ) : (
-            <>
-              <button
-                onClick={() => document.getElementById('splitter-file-upload')?.click()}
-                className="tool-button"
-              >
-                <FileAudio size={16} />
-                更换文件
-              </button>
-              <input
-                id="splitter-file-upload"
-                type="file"
-                accept={Object.values(ACCEPTED_MIME_TYPES).flat().join(',')}
-                className="hidden"
-                onChange={(e) => handleFileUpload(e.target.files)}
-              />
-            </>
-          )}
+          <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-500">
+            <FileAudio size={15} />
+            从左侧文件列表选择
+          </div>
         </div>
       </div>
 
@@ -701,23 +689,16 @@ const SplitterPage: React.FC<SplitterPageProps> = ({ onBack }) => {
       <div
         className="flex-1 flex flex-col overflow-hidden min-h-0"
         onDragOver={(e) => { e.preventDefault(); }}
-        onDrop={(e) => {
-          e.preventDefault();
-          handleFileUpload(e.dataTransfer.files);
-        }}
       >
         {!audioFile ? (
           <div className="flex-1 flex flex-col items-center justify-center w-full h-full rounded-xl border border-dashed border-slate-300 bg-white shadow-inner">
-            <label
-              className="flex flex-col items-center justify-center w-full h-full cursor-pointer hover:bg-slate-50 transition-colors rounded-xl"
-              onClick={() => document.getElementById('splitter-file-upload')?.click()}
-            >
+            <div className="flex flex-col items-center justify-center w-full h-full rounded-xl">
               <div className="mb-4 rounded-2xl bg-slate-100 p-5">
-                <Upload size={42} className="text-slate-500" />
+                <FileAudio size={42} className="text-slate-500" />
               </div>
-              <span className="font-semibold text-slate-700 text-lg">点击或拖拽上传音频</span>
-              <span className="text-sm text-slate-400 mt-2">支持 MP3、WAV、M4A 等格式</span>
-            </label>
+              <span className="font-semibold text-slate-700 text-lg">从左侧文件列表选择音频</span>
+              <span className="text-sm text-slate-400 mt-2">选中后会在这里显示波形和分割片段</span>
+            </div>
           </div>
         ) : (
           <>

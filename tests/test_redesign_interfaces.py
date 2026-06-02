@@ -54,7 +54,7 @@ class RedesignInterfacesTest(unittest.TestCase):
         self.assertIn("async function loadLibraryState()", main)
         self.assertIn("raw.trim()", main)
         self.assertIn("SyntaxError", main)
-        self.assertIn("return null", main)
+        self.assertIn("mergeStateWithAudioLibraryIndex(null, index)", main)
         self.assertIn("async function saveLibraryState(state: unknown)", main)
         self.assertIn("const temporaryPath = `${statePath}.${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}.tmp`", main)
         self.assertIn("fsPromises.rename(temporaryPath, statePath)", main)
