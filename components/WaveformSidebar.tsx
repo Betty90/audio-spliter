@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import WaveSurfer from 'wavesurfer.js';
 import RegionsPlugin from 'wavesurfer.js/dist/plugins/regions.js';
-import { Play, Pause, SkipBack, SkipForward, ZoomIn, ZoomOut, Scissors, Save, Trash2, Merge, RefreshCw, Settings, Download, Loader2, X } from 'lucide-react';
+import { Play, Pause, SkipBack, SkipForward, ZoomIn, ZoomOut, ChevronsUp, ChevronsDown, Scissors, Save, Trash2, Merge, RefreshCw, Settings, Download, Loader2, X } from 'lucide-react';
 import { AppSettings, AudioFile, AudioSegment } from '../types';
 import { SPEAKER_COLORS } from '../constants';
 import ConfirmDialog, { ConfirmConfig } from './ConfirmDialog';
@@ -12,6 +12,10 @@ const MAX_PANEL_WIDTH_RATIO = 0.8;
 const MIN_ANALYSIS_CONTENT_WIDTH = 800;
 const MIN_PANEL_WIDTH = 360;
 const PANEL_WIDTH_FALLBACK = 720;
+const SINGLE_CHANNEL_WAVEFORM_HEIGHT = 240;
+const SPLIT_CHANNEL_WAVEFORM_HEIGHT = 160;
+const MIN_WAVEFORM_HEIGHT_SCALE = 0.7;
+const MAX_WAVEFORM_HEIGHT_SCALE = 2;
 
 function getDefaultPanelWidth(workspaceWidth?: number): number {
   if (typeof window === 'undefined') return PANEL_WIDTH_FALLBACK;
@@ -59,6 +63,7 @@ const WaveformSidebar: React.FC<WaveformSidebarProps> = ({ file, onUpdateSegment
   const regionsRef = useRef<RegionsPlugin | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [zoom, setZoom] = useState(10);
+  const [waveformHeightScale, setWaveformHeightScale] = useState(1);
   const [activeRegion, setActiveRegion] = useState<string | null>(null);
   const [isReady, setIsReady] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -149,6 +154,9 @@ const WaveformSidebar: React.FC<WaveformSidebarProps> = ({ file, onUpdateSegment
   const playButtonClass = 'h-[30px] w-[30px]';
   const playbackIconSize = 13;
   const playIconSize = 13;
+  const baseWaveformHeight = channelCount > 1 ? SPLIT_CHANNEL_WAVEFORM_HEIGHT : SINGLE_CHANNEL_WAVEFORM_HEIGHT;
+  const waveformHeight = Math.round(baseWaveformHeight * waveformHeightScale);
+  const splitChannelGuideTop = waveformHeight + 8;
   const toolButtonClass = hideToolLabels
     ? 'h-8 w-8 flex-none p-0'
     : `h-8 min-w-0 flex-1 ${isCompactToolRow ? 'gap-0.5 px-1 text-[11px] leading-none' : 'px-2 text-xs'}`;
@@ -300,9 +308,8 @@ const WaveformSidebar: React.FC<WaveformSidebarProps> = ({ file, onUpdateSegment
       waveColor: '#94a3b8',
       progressColor: '#007a3d',
       cursorColor: '#ef4444',
-      barWidth: 2,
-      barGap: 3,
-      height: channelCount > 1 ? 160 : 240,
+      sampleRate: 44100,
+      height: waveformHeight,
       url: waveformUrl,
       minPxPerSec: zoom,
       autoScroll: true,
@@ -403,6 +410,12 @@ const WaveformSidebar: React.FC<WaveformSidebarProps> = ({ file, onUpdateSegment
       }
     }
   }, [zoom, isReady]);
+
+  useEffect(() => {
+    if (wavesurferRef.current && isReady) {
+      wavesurferRef.current.setOptions({ height: waveformHeight });
+    }
+  }, [waveformHeight, isReady]);
 
   const togglePlay = () => {
     if (wavesurferRef.current && isReady) {
@@ -806,7 +819,7 @@ const WaveformSidebar: React.FC<WaveformSidebarProps> = ({ file, onUpdateSegment
         <div className="group relative rounded-lg border border-slate-200 bg-white p-2 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
             <div className="mb-2 flex items-center justify-between text-[11px] font-medium text-slate-500">
                 <span className="font-mono">{currentTime.toFixed(1)}s / {duration.toFixed(1)}s</span>
-                <span>{Math.round(zoom)} px/s</span>
+                <span>{Math.round(zoom)} px/s · {waveformHeight}px</span>
             </div>
             <div ref={containerRef} className="w-full overflow-x-auto" />
             
@@ -814,9 +827,9 @@ const WaveformSidebar: React.FC<WaveformSidebarProps> = ({ file, onUpdateSegment
             {isReady && channelCount > 1 && (
                 <>
                     <span className="absolute left-2 top-2 text-[10px] font-medium text-[var(--psbc-green)] bg-[var(--psbc-green-soft)] px-1.5 py-0.5 rounded z-10 pointer-events-none">L</span>
-                    <span className="absolute left-2 top-[168px] text-[10px] font-medium text-amber-600 bg-[var(--psbc-gold-soft)] px-1.5 py-0.5 rounded z-10 pointer-events-none">R</span>
+                    <span className="absolute left-2 text-[10px] font-medium text-amber-600 bg-[var(--psbc-gold-soft)] px-1.5 py-0.5 rounded z-10 pointer-events-none" style={{ top: splitChannelGuideTop }}>R</span>
                     {/* 声道分隔线 - 放在两个声道之间 */}
-                    <div className="absolute left-0 right-0 top-[168px] border-t border-dashed border-gray-200 z-10 pointer-events-none" />
+                    <div className="absolute left-0 right-0 border-t border-dashed border-gray-200 z-10 pointer-events-none" style={{ top: splitChannelGuideTop }} />
                 </>
             )}
             
@@ -828,8 +841,11 @@ const WaveformSidebar: React.FC<WaveformSidebarProps> = ({ file, onUpdateSegment
             )}
 
             <div className="absolute right-3 top-9 z-20 flex gap-1 rounded-lg border border-slate-200 bg-white/90 opacity-0 shadow-sm backdrop-blur-sm transition-opacity group-hover:opacity-100">
-                 <button onClick={() => setZoom(prev => Math.max(10, Math.floor(prev * 0.8)))} className="p-1.5 hover:text-[var(--psbc-green)]" title="缩小"><ZoomOut size={16}/></button>
-                 <button onClick={() => setZoom(prev => Math.min(1000, Math.ceil(prev * 1.2)))} className="p-1.5 hover:text-[var(--psbc-green)]" title="放大"><ZoomIn size={16}/></button>
+                 <button onClick={() => setZoom(prev => Math.max(10, Math.floor(prev * 0.8)))} className="p-1.5 hover:text-[var(--psbc-green)]" title="横向缩小"><ZoomOut size={16}/></button>
+                 <button onClick={() => setZoom(prev => Math.min(1000, Math.ceil(prev * 1.2)))} className="p-1.5 hover:text-[var(--psbc-green)]" title="横向放大"><ZoomIn size={16}/></button>
+                 <span className="my-1 w-px bg-slate-200" aria-hidden="true" />
+                 <button onClick={() => setWaveformHeightScale(prev => Math.max(MIN_WAVEFORM_HEIGHT_SCALE, Number((prev / 1.2).toFixed(2))))} className="p-1.5 hover:text-[var(--psbc-green)]" title="高度减小"><ChevronsDown size={16}/></button>
+                 <button onClick={() => setWaveformHeightScale(prev => Math.min(MAX_WAVEFORM_HEIGHT_SCALE, Number((prev * 1.2).toFixed(2))))} className="p-1.5 hover:text-[var(--psbc-green)]" title="高度增加"><ChevronsUp size={16}/></button>
             </div>
         </div>
       </div>
