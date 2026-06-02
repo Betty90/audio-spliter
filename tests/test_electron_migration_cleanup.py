@@ -83,6 +83,17 @@ class ElectronMigrationCleanupTest(unittest.TestCase):
         self.assertIn("vite", scripts["web:dev"])
         self.assertIn("backend/server.py", scripts["web:dev"])
 
+    def test_python_stderr_does_not_mislabel_flask_info_logs_as_errors(self):
+        python_manager = read("electron/python-manager.ts")
+
+        self.assertIn("function logPythonStderr(text: string): void", python_manager)
+        self.assertIn("const accessLogMatch = line.match", python_manager)
+        self.assertIn("logInfo(`[Python] ${line}`)", python_manager)
+        self.assertIn("logWarn(`[Python Warning] ${line}`)", python_manager)
+        self.assertIn("logError(`[Python Error] ${line}`)", python_manager)
+        self.assertIn("logPythonStderr(data.toString())", python_manager)
+        self.assertNotIn("logError(`[Python Error] ${data.toString().trim()}`)", python_manager)
+
 
 if __name__ == "__main__":
     unittest.main()

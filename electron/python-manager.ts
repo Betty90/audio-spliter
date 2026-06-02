@@ -95,6 +95,25 @@ function healthCheck(port: number): Promise<boolean> {
   });
 }
 
+function logPythonStderr(text: string): void {
+  const lines = text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+
+  for (const line of lines) {
+    const accessLogMatch = line.match(/\s-\s(INFO|WARNING|ERROR|CRITICAL)\s-/);
+
+    if (accessLogMatch?.[1] === 'INFO') {
+      logInfo(`[Python] ${line}`);
+    } else if (accessLogMatch?.[1] === 'WARNING') {
+      logWarn(`[Python Warning] ${line}`);
+    } else {
+      logError(`[Python Error] ${line}`);
+    }
+  }
+}
+
 export function spawnPythonProcess(): Promise<number> {
   return new Promise((resolve, reject) => {
     if (pythonProcess) {
@@ -207,7 +226,7 @@ export function spawnPythonProcess(): Promise<number> {
     });
 
     pythonProcess.stderr?.on('data', (data: Buffer) => {
-      logError(`[Python Error] ${data.toString().trim()}`);
+      logPythonStderr(data.toString());
     });
 
     pythonProcess.on('exit', (code: number | null, signal: string | null) => {
