@@ -12,7 +12,6 @@ import {
   RefreshCw,
   Repeat,
   RotateCcw,
-  Scissors,
   Settings,
   Star,
   Trash2,
@@ -60,7 +59,6 @@ const statusLabel: Record<FileStatus, string> = {
 
 const navItems: Array<{ id: WorkspaceTab; label: string; icon: React.ElementType }> = [
   { id: 'analyzer', label: '分析', icon: Layers },
-  { id: 'splitter', label: '分割', icon: Scissors },
   { id: 'converter', label: '转换', icon: Repeat },
 ];
 

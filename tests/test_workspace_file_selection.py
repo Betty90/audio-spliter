@@ -23,33 +23,34 @@ class WorkspaceFileSelectionTest(unittest.TestCase):
         self.assertIn("selectedFileId={selectedFileId}", app)
         self.assertIn("selectedFileId: string | null", sidebar)
 
-    def test_sidebar_selection_routes_to_transient_splitter_or_converter_actions(self):
+    def test_sidebar_selection_routes_to_transient_converter_action_only(self):
         app = read("App.tsx")
         converter = read("components/ConverterPage.tsx")
-        splitter = read("components/SplitterPage.tsx")
 
         self.assertIn("setPendingConverterFile", app)
-        self.assertIn("setPendingSplitterFile", app)
         self.assertIn("pendingFile={pendingConverterFile}", app)
-        self.assertIn("pendingFile={pendingSplitterFile}", app)
+        self.assertNotIn("setPendingSplitterFile", app)
+        self.assertNotIn("pendingFile={pendingSplitterFile}", app)
+        self.assertNotIn("activeTab === 'splitter'", app)
+        self.assertFalse((ROOT / "components/SplitterPage.tsx").exists())
         self.assertIn("handleWorkspaceFileSelect", app)
         self.assertNotIn("selectedFile={converterSelectedFile}", app)
         self.assertNotIn("selectedFile={splitterSelectedFile}", app)
         self.assertIn("pendingFile?: (AudioFile & { requestId: string }) | null", converter)
-        self.assertIn("pendingFile?: (AudioFile & { requestId: string }) | null", splitter)
         self.assertIn("addAudioFilesToQueue([pendingFile])", converter)
-        self.assertIn("loadAudioFile(pendingFile || null)", splitter)
         self.assertIn("[pendingFile?.requestId]", converter)
-        self.assertIn("[pendingFile?.requestId]", splitter)
 
-    def test_converter_and_splitter_no_longer_accept_direct_uploads(self):
+    def test_converter_no_longer_accepts_direct_uploads(self):
         converter = read("components/ConverterPage.tsx")
-        splitter = read("components/SplitterPage.tsx")
 
         self.assertNotIn("handleFileChange", converter)
         self.assertNotIn("type=\"file\"", converter)
         self.assertNotIn("点击上传或拖拽文件到此处", converter)
-        self.assertNotIn("handleFileUpload", splitter)
-        self.assertNotIn("splitter-file-upload", splitter)
-        self.assertNotIn("type=\"file\"", splitter)
-        self.assertNotIn("上传音频", splitter)
+
+    def test_splitter_workspace_is_removed_from_sidebar_and_types(self):
+        sidebar = read("components/AudioFileSidebar.tsx")
+        types = read("types.ts")
+
+        self.assertNotIn("'splitter'", types)
+        self.assertNotIn("Scissors", sidebar)
+        self.assertNotIn("label: '分割'", sidebar)

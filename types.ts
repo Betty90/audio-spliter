@@ -7,7 +7,7 @@ export interface AudioSegment {
   remark?: string;
 }
 
-export type WorkspaceTab = 'analyzer' | 'splitter' | 'converter';
+export type WorkspaceTab = 'analyzer' | 'converter';
 
 export type LibraryCategory = 'all' | 'recent' | 'favorites' | 'trash';
 

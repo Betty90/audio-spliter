@@ -163,45 +163,6 @@ export const exportSegment = async (
   return response.blob();
 };
 
-export const exportSegmentWithOptions = async (
-  file: File,
-  start: number,
-  end: number,
-  outputFilename: string,
-  options: {
-    channels?: 'both' | 'left' | 'right';
-    preserveFormat?: boolean;
-  } = {},
-  settings?: AppSettings
-): Promise<Blob> => {
-  const formData = new FormData();
-  formData.append('file', file);
-  formData.append('start', start.toString());
-  formData.append('end', end.toString());
-  formData.append('output_filename', outputFilename);
-  
-  if (options.channels) {
-    formData.append('channels', options.channels);
-  }
-  if (options.preserveFormat !== undefined) {
-    formData.append('preserve_format', options.preserveFormat.toString());
-  }
-
-  const backendUrl = await getApiBaseUrl(settings);
-
-  const response = await fetch(`${backendUrl}/export_segment`, {
-    method: 'POST',
-    body: formData,
-  });
-
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.error || `导出失败: ${response.status}`);
-  }
-
-  return response.blob();
-};
-
 export const convertAudio = async (
   file: File,
   outputFormat: string,

@@ -22,7 +22,6 @@ import WaveformSidebar from './components/WaveformSidebar';
 import AudioFileSidebar from './components/AudioFileSidebar';
 import AnalysisTable from './components/AnalysisTable';
 import ConverterPage from './components/ConverterPage';
-import SplitterPage from './components/SplitterPage';
 import ConfirmDialog, { ConfirmConfig } from './components/ConfirmDialog';
 
 const DEFAULT_CONVERSION_SETTINGS: ConversionSettings = {
@@ -128,6 +127,67 @@ function mergeUniquePaths(...pathGroups: string[][]): string[] {
   return [...new Set(pathGroups.flat().map(filePath => filePath.trim()).filter(Boolean))];
 }
 
+function getDesktopFilePath(file: File): string {
+  return window.electron?.getPathForFile?.(file) || (file as File & { path?: string }).path || '';
+}
+
+function fileUrlToPath(value: string): string | null {
+  try {
+    const parsed = new URL(value);
+    if (parsed.protocol !== 'file:') return null;
+    const decodedPath = decodeURIComponent(parsed.pathname);
+    if (/^\/[A-Za-z]:[\\/]/.test(decodedPath)) {
+      return decodedPath.slice(1);
+    }
+    if (parsed.hostname && parsed.hostname !== 'localhost') {
+      return `//${parsed.hostname}${decodedPath}`;
+    }
+    return decodedPath;
+  } catch {
+    return null;
+  }
+}
+
+function isLikelyAbsoluteFilePath(value: string): boolean {
+  return value.startsWith('/') || /^[A-Za-z]:[\\/]/.test(value) || value.startsWith('\\\\') || value.startsWith('//');
+}
+
+function collectDataTransferFilePaths(dataTransfer: DataTransfer): string[] {
+  const payloads = [
+    dataTransfer.getData('text/uri-list'),
+    dataTransfer.getData('text/plain'),
+  ];
+  const candidates = payloads.flatMap(payload => (
+    payload
+      .split(/\r?\n/)
+      .map(line => line.trim())
+      .filter(line => line && !line.startsWith('#'))
+  ));
+
+  return mergeUniquePaths(candidates.map(candidate => {
+    if (candidate.startsWith('file://')) {
+      return fileUrlToPath(candidate) || '';
+    }
+    return isLikelyAbsoluteFilePath(candidate) ? candidate : '';
+  }));
+}
+
+function collectDataTransferFiles(dataTransfer: DataTransfer): File[] {
+  const itemFiles = Array.from(dataTransfer.items)
+    .filter(item => item.kind === 'file')
+    .map(item => item.getAsFile())
+    .filter((file): file is File => Boolean(file));
+  const transferFiles = Array.from(dataTransfer.files);
+  const seen = new Set<string>();
+
+  return [...itemFiles, ...transferFiles].filter(file => {
+    const key = `${file.name}:${file.size}:${file.lastModified}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<WorkspaceTab>('analyzer');
   const [activeCategory, setActiveCategory] = useState<LibraryCategory>('all');
@@ -136,7 +196,6 @@ const App: React.FC = () => {
   const [libraryItems, setLibraryItems] = useState<LibraryItem[]>([]);
   const [collections, setCollections] = useState<LibraryCollection[]>([]);
   const [selectedAnalyzerFileId, setSelectedAnalyzerFileId] = useState<string | null>(null);
-  const [pendingSplitterFile, setPendingSplitterFile] = useState<PendingWorkspaceFile | null>(null);
   const [pendingConverterFile, setPendingConverterFile] = useState<PendingWorkspaceFile | null>(null);
   const [activeSegmentId, setActiveSegmentId] = useState<string | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -271,19 +330,30 @@ const App: React.FC = () => {
   const addFiles = useCallback((newFiles: AudioFile[], shouldAnalyze = true) => {
     if (newFiles.length === 0) return;
     newFiles.forEach(file => deletedFileIdsRef.current.delete(file.id));
+    const uniqueNewFiles = newFiles.filter((file, index, list) => list.findIndex(item => item.id === file.id) === index);
     setFiles(prev => {
       const existingIds = new Set(prev.map(file => file.id));
-      return [...prev, ...newFiles.filter(file => !existingIds.has(file.id))];
+      return [...prev, ...uniqueNewFiles.filter(file => !existingIds.has(file.id))];
     });
-    newFiles.forEach(upsertLibraryItem);
+    setLibraryItems(prev => {
+      const nextItems = uniqueNewFiles.map(file => toLibraryItem(file, prev.find(item => item.id === file.id)));
+      const nextItemById = new Map(nextItems.map(item => [item.id, item]));
+      const existingIds = new Set(prev.map(item => item.id));
+      const next = [
+        ...nextItems.filter(item => !existingIds.has(item.id)),
+        ...prev.map(item => nextItemById.get(item.id) || item),
+      ];
+      persistState(next);
+      return next;
+    });
     if (activeTab === 'analyzer') {
-      setSelectedAnalyzerFileId(newFiles[0].id);
+      setSelectedAnalyzerFileId(uniqueNewFiles[0].id);
       setActiveSegmentId(null);
     }
     if (shouldAnalyze) {
-      newFiles.forEach(file => analyze(file, file.settings || settings));
+      uniqueNewFiles.forEach(file => analyze(file, file.settings || settings));
     }
-  }, [activeTab, analyze, settings, upsertLibraryItem]);
+  }, [activeTab, analyze, persistState, settings]);
 
   const createAudioFilesFromBrowserFiles = useCallback((filesToCreate: File[]): AudioFile[] => (
     filesToCreate.map(file => ({
@@ -301,7 +371,7 @@ const App: React.FC = () => {
     }))
   ), [activeCollectionId]);
 
-  const handleFileUpload = useCallback((fileList: FileList | null) => {
+  const handleFileUpload = useCallback((fileList: FileList | File[] | null) => {
     if (!fileList || fileList.length === 0) return;
     const newFiles = createAudioFilesFromBrowserFiles(Array.from(fileList));
     addFiles(newFiles);
@@ -352,13 +422,13 @@ const App: React.FC = () => {
     addFiles(loaded);
   }, [addFiles, createAudioFileFromPath]);
 
-  const importFilesToLibrary = useCallback(async (fileList: FileList | null, extraFilePaths: string[] = []) => {
+  const importFilesToLibrary = useCallback(async (fileList: FileList | File[] | null, extraFilePaths: string[] = []) => {
     if ((!fileList || fileList.length === 0) && extraFilePaths.length === 0) return;
 
     const filesToImport = Array.from(fileList || []);
     const filesWithPaths = filesToImport.map(file => ({
       file,
-      path: window.electron?.getPathForFile?.(file) || (file as File & { path?: string }).path || '',
+      path: getDesktopFilePath(file),
     }));
     const importablePaths = mergeUniquePaths(
       filesWithPaths.map(item => item.path),
@@ -411,10 +481,6 @@ const App: React.FC = () => {
     if (activeTab === 'analyzer') {
       setSelectedAnalyzerFileId(file.id);
       setActiveSegmentId(null);
-      return;
-    }
-    if (activeTab === 'splitter') {
-      setPendingSplitterFile({ ...file, requestId: makeId('splitter-add') });
       return;
     }
     setPendingConverterFile({ ...file, requestId: makeId('converter-add') });
@@ -609,7 +675,12 @@ const App: React.FC = () => {
   const onDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
-    void importFilesToLibrary(e.dataTransfer.files);
+    const droppedFiles = collectDataTransferFiles(e.dataTransfer);
+    const droppedPaths = mergeUniquePaths(
+      droppedFiles.map(file => getDesktopFilePath(file)).filter(Boolean),
+      collectDataTransferFilePaths(e.dataTransfer),
+    );
+    void importFilesToLibrary(droppedFiles, droppedPaths);
   };
 
   useEffect(() => {
@@ -714,8 +785,6 @@ const App: React.FC = () => {
               }}
               onConversionSettingsChange={setConversionSettings}
             />
-          ) : activeTab === 'splitter' ? (
-            <SplitterPage onBack={() => setActiveTab('analyzer')} pendingFile={pendingSplitterFile} />
           ) : (
             <>
               <main
