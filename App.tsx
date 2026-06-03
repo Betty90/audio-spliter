@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { AlertCircle, AudioWaveform, Clock3, RefreshCw, TrendingDown, TrendingUp } from 'lucide-react';
 import {
   AppSettings,
@@ -124,6 +124,10 @@ function filterLatencyRowsByMode(rows: LatencyRow[], mode: AnalysisRowMode): Lat
   return matched.length ? matched : rows;
 }
 
+function mergeUniquePaths(...pathGroups: string[][]): string[] {
+  return [...new Set(pathGroups.flat().map(filePath => filePath.trim()).filter(Boolean))];
+}
+
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<WorkspaceTab>('analyzer');
   const [activeCategory, setActiveCategory] = useState<LibraryCategory>('all');
@@ -146,6 +150,7 @@ const App: React.FC = () => {
   const [hasLoadedPersistedState, setHasLoadedPersistedState] = useState(false);
   const [outputPolicy, setOutputPolicy] = useState<OutputPolicy>(EMPTY_OUTPUT_POLICY);
   const [conversionSettings, setConversionSettings] = useState<ConversionSettings>(DEFAULT_CONVERSION_SETTINGS);
+  const deletedFileIdsRef = useRef<Set<string>>(new Set());
   const [confirmConfig, setConfirmConfig] = useState<ConfirmConfig>({
     isOpen: false,
     title: '',
@@ -182,6 +187,7 @@ const App: React.FC = () => {
   }, [activeCategory, activeCollectionId, collections, conversionSettings, outputPolicy]);
 
   const upsertLibraryItem = useCallback((file: AudioFile) => {
+    if (deletedFileIdsRef.current.has(file.id)) return;
     setLibraryItems(prev => {
       const existing = prev.find(item => item.id === file.id);
       const nextItem = toLibraryItem(file, existing);
@@ -264,6 +270,7 @@ const App: React.FC = () => {
 
   const addFiles = useCallback((newFiles: AudioFile[], shouldAnalyze = true) => {
     if (newFiles.length === 0) return;
+    newFiles.forEach(file => deletedFileIdsRef.current.delete(file.id));
     setFiles(prev => {
       const existingIds = new Set(prev.map(file => file.id));
       return [...prev, ...newFiles.filter(file => !existingIds.has(file.id))];
@@ -278,9 +285,8 @@ const App: React.FC = () => {
     }
   }, [activeTab, analyze, settings, upsertLibraryItem]);
 
-  const handleFileUpload = useCallback((fileList: FileList | null) => {
-    if (!fileList || fileList.length === 0) return;
-    const newFiles: AudioFile[] = Array.from(fileList).map(file => ({
+  const createAudioFilesFromBrowserFiles = useCallback((filesToCreate: File[]): AudioFile[] => (
+    filesToCreate.map(file => ({
       id: makeId('file'),
       file,
       name: file.name,
@@ -292,9 +298,14 @@ const App: React.FC = () => {
       collectionIds: activeCollectionId ? [activeCollectionId] : [],
       addedAt: Date.now(),
       updatedAt: Date.now(),
-    }));
+    }))
+  ), [activeCollectionId]);
+
+  const handleFileUpload = useCallback((fileList: FileList | null) => {
+    if (!fileList || fileList.length === 0) return;
+    const newFiles = createAudioFilesFromBrowserFiles(Array.from(fileList));
     addFiles(newFiles);
-  }, [activeCollectionId, addFiles]);
+  }, [addFiles, createAudioFilesFromBrowserFiles]);
 
   const createAudioFileFromPath = useCallback(async (filePath: string, existing?: LibraryItem, sourcePath?: string): Promise<AudioFile> => {
     if (!window.electron?.readFileAsBytes) {
@@ -340,6 +351,42 @@ const App: React.FC = () => {
     const loaded = await Promise.all(references.map(ref => createAudioFileFromPath(ref.path)));
     addFiles(loaded);
   }, [addFiles, createAudioFileFromPath]);
+
+  const importFilesToLibrary = useCallback(async (fileList: FileList | null, extraFilePaths: string[] = []) => {
+    if ((!fileList || fileList.length === 0) && extraFilePaths.length === 0) return;
+
+    const filesToImport = Array.from(fileList || []);
+    const filesWithPaths = filesToImport.map(file => ({
+      file,
+      path: window.electron?.getPathForFile?.(file) || (file as File & { path?: string }).path || '',
+    }));
+    const importablePaths = mergeUniquePaths(
+      filesWithPaths.map(item => item.path),
+      extraFilePaths,
+    );
+
+    if (!window.electron?.importAudioFilePathsToLibrary || importablePaths.length === 0) {
+      handleFileUpload(fileList);
+      return;
+    }
+
+    try {
+      const references = await window.electron.importAudioFilePathsToLibrary(importablePaths);
+      const loaded = await Promise.all(references.map(ref => createAudioFileFromPath(ref.path, undefined, ref.sourcePath)));
+      addFiles(loaded);
+
+      const importedPaths = new Set(importablePaths);
+      const pathlessFiles = filesWithPaths
+        .filter(item => !importedPaths.has(item.path))
+        .map(item => item.file);
+      if (pathlessFiles.length) {
+        addFiles(createAudioFilesFromBrowserFiles(pathlessFiles));
+      }
+    } catch (error) {
+      console.error('Failed to import pasted or dropped files into library', error);
+      handleFileUpload(fileList);
+    }
+  }, [addFiles, createAudioFileFromPath, createAudioFilesFromBrowserFiles, handleFileUpload]);
 
   const loadLibraryAudioFile = useCallback(async (itemId: string): Promise<AudioFile | null> => {
     const alreadyLoaded = files.find(file => file.id === itemId);
@@ -426,11 +473,12 @@ const App: React.FC = () => {
       message: '确定要从应用文件库中彻底删除这条记录吗？本地原文件不会被删除。',
       confirmText: '彻底删除',
       onConfirm: () => {
+        deletedFileIdsRef.current.add(fileId);
         setFiles(prev => prev.filter(file => file.id !== fileId));
         setLibraryItems(prev => {
-          const next = prev.filter(item => item.id !== fileId);
-          persistState(next);
-          return next;
+          const nextLibrary = prev.filter(item => item.id !== fileId);
+          persistState(nextLibrary);
+          return nextLibrary;
         });
         clearSelectedAnalyzerFile(fileId);
       },
@@ -561,18 +609,19 @@ const App: React.FC = () => {
   const onDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
-    handleFileUpload(e.dataTransfer.files);
+    void importFilesToLibrary(e.dataTransfer.files);
   };
 
   useEffect(() => {
-    const handlePaste = (e: ClipboardEvent) => {
-      if (e.clipboardData?.files.length) {
-        handleFileUpload(e.clipboardData.files);
+    const handlePaste = async (e: ClipboardEvent) => {
+      const clipboardPaths = await (window.electron?.getClipboardFilePaths?.() || Promise.resolve([]));
+      if (e.clipboardData?.files.length || clipboardPaths.length) {
+        void importFilesToLibrary(e.clipboardData?.files || null, clipboardPaths);
       }
     };
     window.addEventListener('paste', handlePaste);
     return () => window.removeEventListener('paste', handlePaste);
-  }, [handleFileUpload]);
+  }, [importFilesToLibrary]);
 
   const selectedLatencyRows = useMemo(() => buildLatencyRows(activeFile), [activeFile]);
   const modeLatencyRows = useMemo(
@@ -625,7 +674,7 @@ const App: React.FC = () => {
         }}
         onSelectFile={handleWorkspaceFileSelect}
         onSelectLibraryItem={handleSelectLibraryItem}
-        onUpload={handleFileUpload}
+        onUpload={importFilesToLibrary}
         onBrowseFiles={handleBrowseFiles}
         onCreateLibrary={handleCreateLibrary}
         onDeleteLibrary={handleDeleteLibrary}

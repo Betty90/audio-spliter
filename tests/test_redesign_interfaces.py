@@ -18,6 +18,8 @@ class RedesignInterfacesTest(unittest.TestCase):
         for method in [
             "selectAudioFiles",
             "importAudioFilesToLibrary",
+            "importAudioFilePathsToLibrary",
+            "getClipboardFilePaths",
             "selectOutputDirectory",
             "readFileAsBytes",
             "saveFile",
@@ -32,6 +34,8 @@ class RedesignInterfacesTest(unittest.TestCase):
         for channel in [
             "select-audio-files",
             "import-audio-files-to-library",
+            "import-audio-file-paths-to-library",
+            "get-clipboard-file-paths",
             "select-output-directory",
             "read-file-as-bytes",
             "save-file",
@@ -48,6 +52,30 @@ class RedesignInterfacesTest(unittest.TestCase):
         self.assertNotIn("Promise.all(result.filePaths.map(importedFileReference))", main)
         self.assertIn("for (const filePath of result.filePaths)", main)
 
+    def test_pasted_desktop_files_are_imported_into_library_storage(self):
+        app = read("App.tsx")
+        main = read("electron/main.ts")
+        preload = read("electron/preload.js")
+        declarations = read("global.d.ts")
+
+        self.assertIn("importAudioFilePathsToLibrary", preload)
+        self.assertIn("importAudioFilePathsToLibrary", declarations)
+        self.assertIn("import-audio-file-paths-to-library", main)
+        self.assertIn("const importFilesToLibrary = useCallback(async (fileList: FileList | null, extraFilePaths: string[] = [])", app)
+        self.assertIn("file as File & { path?: string }", app)
+        self.assertIn("window.electron?.importAudioFilePathsToLibrary", app)
+        self.assertIn("window.electron?.getClipboardFilePaths", app)
+        self.assertIn("mergeUniquePaths", app)
+        self.assertIn("handlePaste", app)
+        self.assertIn("const clipboardPaths = await (window.electron?.getClipboardFilePaths?.() || Promise.resolve([]))", app)
+        self.assertIn("importFilesToLibrary(e.clipboardData?.files || null, clipboardPaths)", app)
+        self.assertIn("onDrop", app)
+        self.assertIn("importFilesToLibrary(e.dataTransfer.files)", app)
+        self.assertIn("getClipboardFilePaths: () => ipcRenderer.invoke('get-clipboard-file-paths')", preload)
+        self.assertIn("NSPasteboard.generalPasteboard", main)
+        self.assertIn('propertyListForType("NSFilenamesPboardType")', main)
+        self.assertIn("readClipboardBufferText('FileNameW', 'ucs2')", main)
+
     def test_library_state_load_and_save_are_resilient_to_partial_writes(self):
         main = read("electron/main.ts")
 
@@ -60,6 +88,7 @@ class RedesignInterfacesTest(unittest.TestCase):
         self.assertIn("const temporaryPath = `${statePath}.${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}.tmp`", main)
         self.assertIn("fsPromises.rename(temporaryPath, statePath)", main)
         self.assertNotIn("fsPromises.writeFile(getLibraryStatePath(), JSON.stringify(state, null, 2), 'utf-8')", main)
+        self.assertIn("saveLibraryState: (state) => ipcRenderer.invoke('save-library-state', state)", read("electron/preload.js"))
 
     def test_backend_conversion_supports_allow_listed_advanced_options(self):
         backend = read("backend/server.py")
@@ -117,6 +146,16 @@ class RedesignInterfacesTest(unittest.TestCase):
         self.assertNotIn("暂无文件", sidebar)
         self.assertIn("直接删除记录", sidebar)
         self.assertIn("移到回收站", sidebar)
+
+    def test_permanent_delete_cannot_be_readded_by_background_analysis(self):
+        app = read("App.tsx")
+
+        self.assertIn("deletedFileIdsRef", app)
+        self.assertIn("if (deletedFileIdsRef.current.has(file.id)) return", app)
+        self.assertIn("deletedFileIdsRef.current.add(fileId)", app)
+        self.assertIn("deletedFileIdsRef.current.delete(file.id)", app)
+        self.assertIn("const nextLibrary = prev.filter(item => item.id !== fileId)", app)
+        self.assertIn("persistState(nextLibrary)", app)
 
     def test_custom_library_can_be_deleted_without_deleting_files(self):
         sidebar = read("components/AudioFileSidebar.tsx")

@@ -1,8 +1,10 @@
-import { app, BrowserWindow, dialog, ipcMain, shell, Menu } from 'electron';
+import { app, BrowserWindow, clipboard, dialog, ipcMain, shell, Menu } from 'electron';
 import type { MenuItemConstructorOptions, OpenDialogOptions } from 'electron';
+import { execFile } from 'child_process';
 import path from 'path';
 import fs from 'fs';
 import { promises as fsPromises } from 'fs';
+import { promisify } from 'util';
 import { getPythonPort, stopPythonProcess, waitForPython, setShuttingDown } from './python-manager.js';
 import { logInfo, logError } from './logger.js';
 import { initUpdater, checkForUpdatesOnStartup, checkForUpdates } from './updater.js';
@@ -13,6 +15,7 @@ let loadingWindow: BrowserWindow | null = null;
 const isDev = !app.isPackaged;
 const libraryStateFileName = 'uaudiolab-library-state.json';
 const audioLibraryDirectoryName = 'audio-library';
+const execFileAsync = promisify(execFile);
 
 interface SaveFileOptions {
   directory?: string;
@@ -42,6 +45,10 @@ function getAudioLibraryDirectory(): string {
 function safeBaseName(fileName: string): string {
   const cleaned = path.basename(fileName).replace(/[<>:"/\\|?*\x00-\x1F]/g, '_').trim();
   return cleaned || `uaudiolab-${Date.now()}`;
+}
+
+function uniqueNonEmpty(values: string[]): string[] {
+  return [...new Set(values.map(value => value.trim()).filter(Boolean))];
 }
 
 async function fileReference(filePath: string) {
@@ -123,6 +130,44 @@ function coerceBuffer(data: SaveFileOptions['data']): Buffer {
     return Buffer.from(data);
   }
   return Buffer.from(new Uint8Array(data));
+}
+
+function readClipboardBufferText(format: string, encoding: BufferEncoding = 'utf8'): string {
+  try {
+    const buffer = clipboard.readBuffer(format);
+    return buffer.length ? buffer.toString(encoding).replace(/\0+$/g, '') : '';
+  } catch {
+    return '';
+  }
+}
+
+async function readMacClipboardFilePaths(): Promise<string[]> {
+  if (process.platform !== 'darwin') {
+    return [];
+  }
+
+  const script = [
+    'ObjC.import("AppKit");',
+    'const pasteboard = $.NSPasteboard.generalPasteboard;',
+    'const value = pasteboard.propertyListForType("NSFilenamesPboardType");',
+    'JSON.stringify(ObjC.deepUnwrap(value) || []);',
+  ].join(' ');
+
+  try {
+    const { stdout } = await execFileAsync('osascript', ['-l', 'JavaScript', '-e', script], { timeout: 2000 });
+    const parsed = JSON.parse(stdout.trim() || '[]');
+    return Array.isArray(parsed) ? uniqueNonEmpty(parsed.filter((item): item is string => typeof item === 'string')) : [];
+  } catch (error) {
+    logInfo(`[Main] Failed to read macOS clipboard file paths: ${error}`);
+    return [];
+  }
+}
+
+async function getClipboardFilePaths(): Promise<string[]> {
+  const paths = await readMacClipboardFilePaths();
+  paths.push(...readClipboardBufferText('FileNameW', 'ucs2').split(/\0|\r?\n/));
+  paths.push(...readClipboardBufferText('FileName').split(/\0|\r?\n/));
+  return uniqueNonEmpty(paths);
 }
 
 async function calculateStorageStats(targetPath?: string) {
@@ -456,6 +501,23 @@ app.whenReady().then(async () => {
       references.push(await importedFileReference(filePath));
     }
     return references;
+  });
+
+  ipcMain.handle('import-audio-file-paths-to-library', async (_event, filePaths: unknown) => {
+    if (!Array.isArray(filePaths)) {
+      return [];
+    }
+
+    const references = [];
+    for (const filePath of filePaths) {
+      if (typeof filePath !== 'string' || !filePath) continue;
+      references.push(await importedFileReference(filePath));
+    }
+    return references;
+  });
+
+  ipcMain.handle('get-clipboard-file-paths', async () => {
+    return getClipboardFilePaths();
   });
 
   ipcMain.handle('select-output-directory', async () => {

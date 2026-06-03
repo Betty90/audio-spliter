@@ -6,8 +6,11 @@ declare global {
       getPythonPort: () => Promise<number>;
       selectAudioFiles: () => Promise<ElectronFileReference[]>;
       importAudioFilesToLibrary: () => Promise<ElectronFileReference[]>;
+      importAudioFilePathsToLibrary: (filePaths: string[]) => Promise<ElectronFileReference[]>;
+      getClipboardFilePaths: () => Promise<string[]>;
       selectOutputDirectory: () => Promise<string | null>;
       readFileAsBytes: (filePath: string) => Promise<ElectronFileBytes>;
+      getPathForFile?: (file: File) => string;
       saveFile: (options: ElectronSaveFileOptions) => Promise<ElectronSavedFile>;
       loadLibraryState: () => Promise<unknown>;
       saveLibraryState: (state: unknown) => Promise<{ ok: true }>;
