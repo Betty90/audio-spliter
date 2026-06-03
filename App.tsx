@@ -18,7 +18,7 @@ import { analyzeAudio, checkHealth as checkBackendHealth } from './services/apiS
 import { DEFAULT_SETTINGS } from './constants';
 import SettingsModal from './components/SettingsModal';
 import LabModal from './components/LabModal';
-import WaveformSidebar from './components/WaveformSidebar';
+import WaveformSidebar, { type WaveformSidebarLayoutMode } from './components/WaveformSidebar';
 import AudioFileSidebar from './components/AudioFileSidebar';
 import AnalysisTable from './components/AnalysisTable';
 import ConverterPage from './components/ConverterPage';
@@ -43,7 +43,8 @@ const EMPTY_OUTPUT_POLICY: OutputPolicy = {
   afterConversion: 'none',
 };
 
-const ANALYSIS_CONTENT_WIDTH = 800;
+const ANALYSIS_SIDEBAR_DRAWER_BACKDROP_CLASS =
+  'absolute inset-0 z-10 bg-slate-950/10 backdrop-blur-[1px]';
 
 type AnalysisRowMode = string;
 type PendingWorkspaceFile = AudioFile & { requestId: string };
@@ -203,7 +204,7 @@ const App: React.FC = () => {
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [editingSettingsFileId, setEditingSettingsFileId] = useState<string | null>(null);
   const [analysisRowMode, setAnalysisRowMode] = useState<AnalysisRowMode>('all');
-  const [isAnalysisSidebarOverlaying, setIsAnalysisSidebarOverlaying] = useState(false);
+  const [analysisSidebarMode, setAnalysisSidebarMode] = useState<WaveformSidebarLayoutMode>('inline');
   const [isDragging, setIsDragging] = useState(false);
   const [backendHealthy, setBackendHealthy] = useState<boolean>(true);
   const [hasLoadedPersistedState, setHasLoadedPersistedState] = useState(false);
@@ -791,7 +792,6 @@ const App: React.FC = () => {
                 className={`relative flex min-w-0 flex-1 flex-col gap-4 overflow-hidden bg-slate-50/70 p-5 transition-colors ${
                   isDragging ? 'bg-[var(--psbc-green-soft)]/60 ring-4 ring-[var(--psbc-green-line)]' : ''
                 }`}
-                style={isAnalysisSidebarOverlaying ? { width: ANALYSIS_CONTENT_WIDTH, flex: '0 0 auto' } : undefined}
                 onDragOver={onDragOver}
                 onDragLeave={onDragLeave}
                 onDrop={onDrop}
@@ -844,6 +844,15 @@ const App: React.FC = () => {
                 )}
               </main>
 
+              {analysisSidebarMode === 'drawer' && activeFile && (
+                <button
+                  type="button"
+                  aria-label="关闭波形抽屉"
+                  className={ANALYSIS_SIDEBAR_DRAWER_BACKDROP_CLASS}
+                  onClick={() => setSelectedAnalyzerFileId(null)}
+                />
+              )}
+
               <WaveformSidebar
                 file={activeFile}
                 onUpdateSegments={handleSegmentUpdate}
@@ -853,7 +862,7 @@ const App: React.FC = () => {
                 onSegmentSelect={setActiveSegmentId}
                 onReanalyze={handleReanalyzeRequest}
                 onOpenSettings={setEditingSettingsFileId}
-                onOverlayChange={setIsAnalysisSidebarOverlaying}
+                onLayoutModeChange={setAnalysisSidebarMode}
               />
             </>
           )}

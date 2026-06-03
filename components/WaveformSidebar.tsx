@@ -12,6 +12,8 @@ const MAX_PANEL_WIDTH_RATIO = 0.8;
 const MIN_ANALYSIS_CONTENT_WIDTH = 800;
 const MIN_PANEL_WIDTH = 360;
 const PANEL_WIDTH_FALLBACK = 720;
+const DRAWER_WIDTH = 720;
+const DRAWER_VIEWPORT_WIDTH_RATIO = 0.88;
 const SINGLE_CHANNEL_WAVEFORM_HEIGHT = 240;
 const SPLIT_CHANNEL_WAVEFORM_HEIGHT = 160;
 const MIN_WAVEFORM_HEIGHT_SCALE = 0.7;
@@ -25,6 +27,8 @@ function getDefaultPanelWidth(workspaceWidth?: number): number {
   return Math.min(maxWidth, Math.max(MIN_PANEL_WIDTH, availableWidth));
 }
 
+export type WaveformSidebarLayoutMode = 'inline' | 'drawer';
+
 interface WaveformSidebarProps {
   file: AudioFile | null;
   onUpdateSegments: (fileId: string, segments: AudioSegment[]) => void;
@@ -34,7 +38,7 @@ interface WaveformSidebarProps {
   onSegmentSelect?: (id: string | null) => void;
   onReanalyze?: (fileId: string) => void;
   onOpenSettings?: (fileId: string) => void;
-  onOverlayChange?: (isOverlaying: boolean) => void;
+  onLayoutModeChange?: (mode: WaveformSidebarLayoutMode) => void;
 }
 
 function normalizeSpeakerKey(speaker: string): string {
@@ -56,7 +60,17 @@ function displaySidebarSpeakerHint(speaker: string, speakerLabels: Record<string
   return speakerLabels[normalizedSpeaker]?.trim() ? normalizedSpeaker : '';
 }
 
-const WaveformSidebar: React.FC<WaveformSidebarProps> = ({ file, onUpdateSegments, onClose, settings, activeSegmentId, onSegmentSelect, onReanalyze, onOpenSettings, onOverlayChange }) => {
+const WaveformSidebar: React.FC<WaveformSidebarProps> = ({
+  file,
+  onUpdateSegments,
+  onClose,
+  settings,
+  activeSegmentId,
+  onSegmentSelect,
+  onReanalyze,
+  onOpenSettings,
+  onLayoutModeChange,
+}) => {
   const panelRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const wavesurferRef = useRef<WaveSurfer | null>(null);
@@ -145,9 +159,25 @@ const WaveformSidebar: React.FC<WaveformSidebarProps> = ({ file, onUpdateSegment
     };
   }, []);
 
-  const effectiveWidth = workspaceWidth > 0 ? Math.min(width, workspaceWidth) : width;
-  const shouldOverlay = workspaceWidth > 0 && workspaceWidth - effectiveWidth < MIN_ANALYSIS_CONTENT_WIDTH;
-  const panelPlacementClass = shouldOverlay ? 'absolute right-0 top-0 bottom-0' : 'relative';
+  const inlineWidth = workspaceWidth > 0 ? Math.min(width, workspaceWidth) : width;
+  const layoutMode: WaveformSidebarLayoutMode =
+    workspaceWidth > 0 && workspaceWidth - inlineWidth < MIN_ANALYSIS_CONTENT_WIDTH ? 'drawer' : 'inline';
+  const drawerTargetWidth =
+    typeof window === 'undefined'
+      ? Math.min(DRAWER_WIDTH, inlineWidth)
+      : Math.min(DRAWER_WIDTH, Math.round(window.innerWidth * DRAWER_VIEWPORT_WIDTH_RATIO));
+  const effectiveWidth =
+    layoutMode === 'drawer'
+      ? Math.min(
+          typeof window === 'undefined' ? drawerTargetWidth : window.innerWidth,
+          Math.max(MIN_PANEL_WIDTH, drawerTargetWidth)
+        )
+      : inlineWidth;
+  const panelPlacementClass = layoutMode === 'drawer' ? 'absolute right-0 top-0 bottom-0' : 'relative';
+  const panelShadowClass =
+    layoutMode === 'drawer'
+      ? 'shadow-[-12px_0_32px_rgba(15,23,42,0.18)]'
+      : 'shadow-[-4px_0_16px_rgba(15,23,42,0.08)]';
   const isCompactToolRow = effectiveWidth < 460;
   const hideToolLabels = effectiveWidth < 400;
   const playbackButtonClass = 'h-[22px] w-[22px] rounded-md';
@@ -165,9 +195,9 @@ const WaveformSidebar: React.FC<WaveformSidebarProps> = ({ file, onUpdateSegment
     : `flex min-w-0 flex-1 items-center ${isCompactToolRow ? 'gap-0.5' : 'gap-1.5'}`;
 
   useEffect(() => {
-    if (onOverlayChange) onOverlayChange(shouldOverlay);
-    return () => onOverlayChange?.(false);
-  }, [onOverlayChange, shouldOverlay]);
+    onLayoutModeChange?.(layoutMode);
+    return () => onLayoutModeChange?.('inline');
+  }, [layoutMode, onLayoutModeChange]);
 
   // Handle pinch-to-zoom (Trackpad)
   useEffect(() => {
@@ -691,7 +721,7 @@ const WaveformSidebar: React.FC<WaveformSidebarProps> = ({ file, onUpdateSegment
 	          <div
 	            ref={panelRef}
 	            style={{ width: effectiveWidth }}
-	            className={`${panelPlacementClass} z-20 flex h-full shrink-0 flex-col items-center justify-center border-l border-slate-200 bg-white p-6 text-center text-slate-400 shadow-[-4px_0_16px_rgba(15,23,42,0.08)]`}
+	            className={`${panelPlacementClass} z-20 flex h-full shrink-0 flex-col items-center justify-center border-l border-slate-200 bg-white p-6 text-center text-slate-400 ${panelShadowClass}`}
 	          >
               <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-slate-100">
                   <Play size={20} />
@@ -706,16 +736,18 @@ const WaveformSidebar: React.FC<WaveformSidebarProps> = ({ file, onUpdateSegment
 	    <div 
 	        ref={panelRef}
 	        style={{ width: effectiveWidth }}
-	        className={`${panelPlacementClass} z-20 flex h-full shrink-0 flex-col border-l border-slate-200 bg-white shadow-[-4px_0_16px_rgba(15,23,42,0.08)] transition-none`}
+	        className={`${panelPlacementClass} z-20 flex h-full shrink-0 flex-col border-l border-slate-200 bg-white ${panelShadowClass} transition-none`}
 	    >
       {/* Resize Handle */}
-      <div
-        className="absolute left-0 top-0 bottom-0 w-1.5 cursor-ew-resize hover:bg-[var(--psbc-green)] transition-colors z-50 -ml-0.5"
-        onMouseDown={(e) => {
-            e.preventDefault(); // Prevent text selection
+      {layoutMode === 'inline' && (
+        <div
+          className="absolute left-0 top-0 bottom-0 z-50 -ml-0.5 w-1.5 cursor-ew-resize transition-colors hover:bg-[var(--psbc-green)]"
+          onMouseDown={(e) => {
+            e.preventDefault();
             setIsResizing(true);
-        }}
-      />
+          }}
+        />
+      )}
 
       {/* Header - Fixed */}
       <div className="z-20 flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3">
