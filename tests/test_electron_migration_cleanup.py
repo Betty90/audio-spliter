@@ -94,30 +94,32 @@ class ElectronMigrationCleanupTest(unittest.TestCase):
         self.assertIn("logPythonStderr(data.toString())", python_manager)
         self.assertNotIn("logError(`[Python Error] ${data.toString().trim()}`)", python_manager)
 
-    def test_saving_library_state_prunes_unreferenced_audio_library_files(self):
+    def test_saving_library_state_prunes_unreferenced_audio_library_files_from_state(self):
         main = read("electron/main.ts")
 
-        self.assertIn("async function synchronizeAudioLibraryIndex(state: unknown)", main)
-        self.assertIn("const index = await loadAudioLibraryIndex()", main)
-        self.assertIn("await saveAudioLibraryIndex(nextIndex)", main)
-        self.assertIn("await synchronizeAudioLibraryIndex(state)", main)
-        self.assertIn("if (!referencedPaths.has(entryPath))", main)
+        self.assertIn("async function pruneUnreferencedAudioLibraryFiles(state: unknown)", main)
+        self.assertIn("await pruneUnreferencedAudioLibraryFiles(state)", main)
+        self.assertIn("if (!candidate || !Array.isArray(candidate.library))", main)
+        self.assertIn("if (referencedPaths.has(entryPath)) continue", main)
         self.assertIn("await fsPromises.unlink(entryPath)", main)
         self.assertIn("logInfo(`[Main] Pruned deleted audio-library file:", main)
+        self.assertNotIn("synchronizeAudioLibraryIndex", main)
+        self.assertNotIn("loadAudioLibraryIndex", main)
+        self.assertNotIn("saveAudioLibraryIndex", main)
 
-    def test_audio_library_has_internal_index_for_startup_recovery(self):
+    def test_library_state_is_the_only_audio_library_metadata_source(self):
         main = read("electron/main.ts")
         app = read("App.tsx")
 
-        self.assertIn("const audioLibraryIndexFileName = 'library-index.json'", main)
-        self.assertIn("interface AudioLibraryIndex", main)
-        self.assertIn("function getAudioLibraryIndexPath()", main)
-        self.assertIn("async function loadAudioLibraryIndex()", main)
-        self.assertIn("async function saveAudioLibraryIndex(index: AudioLibraryIndex)", main)
-        self.assertIn("function toLibraryItemFromIndexedFile", main)
-        self.assertIn("mergeStateWithAudioLibraryIndex", main)
-        self.assertIn("return mergeStateWithAudioLibraryIndex(parsed, index)", main)
-        self.assertIn("return mergeStateWithAudioLibraryIndex(null, index)", main)
+        self.assertNotIn("library-index.json", main)
+        self.assertNotIn("AudioLibraryIndex", main)
+        self.assertNotIn("getAudioLibraryIndexPath", main)
+        self.assertNotIn("loadAudioLibraryIndex", main)
+        self.assertNotIn("saveAudioLibraryIndex", main)
+        self.assertNotIn("toLibraryItemFromIndexedFile", main)
+        self.assertNotIn("mergeStateWithAudioLibraryIndex", main)
+        self.assertIn("return JSON.parse(raw)", main)
+        self.assertIn("return null", main)
         self.assertIn("const [hasLoadedPersistedState, setHasLoadedPersistedState] = useState(false)", app)
         self.assertIn("if (!hasLoadedPersistedState) return", app)
 
