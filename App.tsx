@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { AlertCircle, AudioWaveform, Clock3, PanelRightClose, PanelRightOpen, RefreshCw, TrendingDown, TrendingUp } from 'lucide-react';
+import { AlertCircle, AudioWaveform, Clock3, PanelRightOpen, RefreshCw, TrendingDown, TrendingUp } from 'lucide-react';
 import {
   AppSettings,
   AudioFile,
@@ -792,24 +792,38 @@ const App: React.FC = () => {
                 className={`relative flex min-w-0 flex-1 flex-col gap-4 overflow-hidden bg-slate-50/70 p-5 transition-colors ${
                   isDragging ? 'bg-[var(--psbc-green-soft)]/60 ring-4 ring-[var(--psbc-green-line)]' : ''
                 }`}
-                style={{ minWidth: `min(${DESKTOP_ANALYSIS_CONTENT_WIDTH}px, max(${COMPACT_ANALYSIS_CONTENT_WIDTH}px, calc(100vw - 584px)))` }}
+                style={{ minWidth: `min(${DESKTOP_ANALYSIS_CONTENT_WIDTH}px, max(${COMPACT_ANALYSIS_CONTENT_WIDTH}px, calc(100vw - 544px)))` }}
                 onDragOver={onDragOver}
                 onDragLeave={onDragLeave}
                 onDrop={onDrop}
               >
-                <div className="grid shrink-0 grid-cols-4 gap-2">
-                  {analysisStatCards.map(({ label, value, hint, icon: Icon, tone }) => (
-                    <div key={label} className="group relative min-w-0 rounded-lg border border-slate-200 bg-white px-3 py-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-colors hover:border-slate-300">
-                      <div className="min-w-0 pr-8">
-                        <div className="whitespace-nowrap text-[11px] font-bold leading-none text-slate-500">{label}</div>
-                        <div className="mt-2 whitespace-nowrap text-[20px] font-bold leading-none text-slate-950">{value}</div>
-                        <div className="mt-2 whitespace-nowrap text-[11px] font-medium leading-none text-slate-500">{hint}</div>
+                <div className="flex shrink-0 items-stretch gap-2">
+                  <div className="grid min-w-0 flex-1 grid-cols-4 gap-2">
+                    {analysisStatCards.map(({ label, value, hint, icon: Icon, tone }) => (
+                      <div key={label} className="group relative min-w-0 rounded-lg border border-slate-200 bg-white px-3 py-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-colors hover:border-slate-300">
+                        <div className="min-w-0 pr-8">
+                          <div className="whitespace-nowrap text-[11px] font-bold leading-none text-slate-500">{label}</div>
+                          <div className="mt-2 whitespace-nowrap text-[20px] font-bold leading-none text-slate-950">{value}</div>
+                          <div className="mt-2 whitespace-nowrap text-[11px] font-medium leading-none text-slate-500">{hint}</div>
+                        </div>
+                        <div className={`absolute right-3 top-3 flex h-7 w-7 items-center justify-center rounded-lg ring-1 ${statToneClass[tone]}`}>
+                          <Icon size={15} />
+                        </div>
                       </div>
-                      <div className={`absolute right-3 top-3 flex h-7 w-7 items-center justify-center rounded-lg ring-1 ${statToneClass[tone]}`}>
-                        <Icon size={15} />
-                      </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
+
+                  {!isWaveformSidebarVisible && (
+                    <button
+                      type="button"
+                      onClick={() => setIsWaveformSidebarVisible(true)}
+                      className="flex w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-colors hover:border-slate-300 hover:text-slate-950"
+                      title="显示波形侧栏"
+                      aria-label="显示波形侧栏"
+                    >
+                      <PanelRightOpen size={16} />
+                    </button>
+                  )}
                 </div>
 
                 {files.length === 0 ? (
@@ -845,18 +859,6 @@ const App: React.FC = () => {
                 )}
               </main>
 
-              <aside className="z-20 flex h-full w-10 shrink-0 flex-col items-center border-l border-slate-200 bg-white/85 px-1.5 py-3 shadow-[-2px_0_10px_rgba(15,23,42,0.04)] backdrop-blur">
-                <button
-                  type="button"
-                  onClick={() => setIsWaveformSidebarVisible(prev => !prev)}
-                  className="flex h-7 w-7 items-center justify-center rounded-md text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-950"
-                  title={isWaveformSidebarVisible ? '隐藏波形侧栏' : '显示波形侧栏'}
-                  aria-label={isWaveformSidebarVisible ? '隐藏波形侧栏' : '显示波形侧栏'}
-                >
-                  {isWaveformSidebarVisible ? <PanelRightClose size={15} /> : <PanelRightOpen size={15} />}
-                </button>
-              </aside>
-
               {isWaveformSidebarVisible && (
                 <WaveformSidebar
                   file={activeFile}
@@ -867,6 +869,7 @@ const App: React.FC = () => {
                   onSegmentSelect={setActiveSegmentId}
                   onReanalyze={handleReanalyzeRequest}
                   onOpenSettings={setEditingSettingsFileId}
+                  onHide={() => setIsWaveformSidebarVisible(false)}
                 />
               )}
             </>

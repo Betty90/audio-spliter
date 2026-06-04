@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import WaveSurfer from 'wavesurfer.js';
 import RegionsPlugin from 'wavesurfer.js/dist/plugins/regions.js';
-import { Play, Pause, SkipBack, SkipForward, ZoomIn, ZoomOut, ChevronsUp, ChevronsDown, Scissors, Save, Trash2, Merge, RefreshCw, Settings, Download, Loader2, X } from 'lucide-react';
+import { Play, Pause, SkipBack, SkipForward, ZoomIn, ZoomOut, ChevronsUp, ChevronsDown, Scissors, Save, Trash2, Merge, RefreshCw, Settings, Download, Loader2, X, PanelRightClose } from 'lucide-react';
 import { AppSettings, AudioFile, AudioSegment } from '../types';
 import { SPEAKER_COLORS } from '../constants';
 import ConfirmDialog, { ConfirmConfig } from './ConfirmDialog';
@@ -13,7 +13,6 @@ const DESKTOP_ANALYSIS_CONTENT_WIDTH = 720;
 const MIN_ANALYSIS_CONTENT_WIDTH = 440;
 const MIN_PANEL_WIDTH = 320;
 const PANEL_WIDTH_FALLBACK = 560;
-const SIDEBAR_RAIL_WIDTH = 40;
 const SINGLE_CHANNEL_WAVEFORM_HEIGHT = 240;
 const SPLIT_CHANNEL_WAVEFORM_HEIGHT = 160;
 const MIN_WAVEFORM_HEIGHT_SCALE = 0.7;
@@ -24,7 +23,7 @@ function getDefaultPanelWidth(workspaceWidth?: number): number {
   const viewportMaxWidth = Math.round(window.innerWidth * MAX_PANEL_WIDTH_RATIO);
   const maxWidth = workspaceWidth ? Math.min(viewportMaxWidth, workspaceWidth) : viewportMaxWidth;
   const availableWidth = workspaceWidth
-    ? workspaceWidth - DESKTOP_ANALYSIS_CONTENT_WIDTH - SIDEBAR_RAIL_WIDTH
+    ? workspaceWidth - DESKTOP_ANALYSIS_CONTENT_WIDTH
     : Math.round(window.innerWidth * DEFAULT_PANEL_WIDTH_RATIO);
   return Math.min(maxWidth, Math.max(MIN_PANEL_WIDTH, availableWidth));
 }
@@ -38,6 +37,7 @@ interface WaveformSidebarProps {
   onSegmentSelect?: (id: string | null) => void;
   onReanalyze?: (fileId: string) => void;
   onOpenSettings?: (fileId: string) => void;
+  onHide?: () => void;
 }
 
 function normalizeSpeakerKey(speaker: string): string {
@@ -68,6 +68,7 @@ const WaveformSidebar: React.FC<WaveformSidebarProps> = ({
   onSegmentSelect,
   onReanalyze,
   onOpenSettings,
+  onHide,
 }) => {
   const panelRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -110,7 +111,7 @@ const WaveformSidebar: React.FC<WaveformSidebarProps> = ({
       const newWidth = workspaceRight - e.clientX;
       const maxWidth = Math.max(
         Math.min(MIN_PANEL_WIDTH, measuredWorkspaceWidth),
-        Math.min(measuredWorkspaceWidth, measuredWorkspaceWidth - MIN_ANALYSIS_CONTENT_WIDTH - SIDEBAR_RAIL_WIDTH)
+        Math.min(measuredWorkspaceWidth, measuredWorkspaceWidth - MIN_ANALYSIS_CONTENT_WIDTH)
       );
       const minWidth = Math.min(MIN_PANEL_WIDTH, maxWidth);
       const clampedWidth = Math.min(maxWidth, Math.max(minWidth, newWidth));
@@ -162,9 +163,10 @@ const WaveformSidebar: React.FC<WaveformSidebarProps> = ({
 
   const maxInlineWidth =
     workspaceWidth > 0
-      ? Math.max(Math.min(MIN_PANEL_WIDTH, workspaceWidth), workspaceWidth - MIN_ANALYSIS_CONTENT_WIDTH - SIDEBAR_RAIL_WIDTH)
+      ? Math.max(Math.min(MIN_PANEL_WIDTH, workspaceWidth), workspaceWidth - MIN_ANALYSIS_CONTENT_WIDTH)
       : width;
   const effectiveWidth = workspaceWidth > 0 ? Math.min(width, maxInlineWidth) : width;
+  const panelStyle = { width: effectiveWidth, flexBasis: effectiveWidth, maxWidth: effectiveWidth };
   const panelPlacementClass = 'relative';
   const panelShadowClass = 'shadow-[-4px_0_16px_rgba(15,23,42,0.08)]';
   const isCompactToolRow = effectiveWidth < 460;
@@ -704,9 +706,19 @@ const WaveformSidebar: React.FC<WaveformSidebarProps> = ({
 	      return (
 	          <div
 	            ref={panelRef}
-	            style={{ width: effectiveWidth }}
-	            className={`${panelPlacementClass} z-20 flex h-full shrink-0 flex-col items-center justify-center border-l border-slate-200 bg-white p-6 text-center text-slate-400 ${panelShadowClass}`}
+	            style={panelStyle}
+	            className={`${panelPlacementClass} z-20 flex h-full min-w-0 shrink-0 flex-col items-center justify-center overflow-hidden border-l border-slate-200 bg-white p-6 text-center text-slate-400 ${panelShadowClass}`}
 	          >
+              {onHide && (
+                <button
+                  onClick={onHide}
+                  className="icon-button absolute right-3 top-3"
+                  title="隐藏波形侧栏"
+                  aria-label="隐藏波形侧栏"
+                >
+                  <PanelRightClose size={16} />
+                </button>
+              )}
               <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-slate-100">
                   <Play size={20} />
               </div>
@@ -719,8 +731,8 @@ const WaveformSidebar: React.FC<WaveformSidebarProps> = ({
 	  return (
 	    <div 
 	        ref={panelRef}
-	        style={{ width: effectiveWidth }}
-	        className={`${panelPlacementClass} z-20 flex h-full shrink-0 flex-col border-l border-slate-200 bg-white ${panelShadowClass} transition-none`}
+	        style={panelStyle}
+	        className={`${panelPlacementClass} z-20 flex h-full min-w-0 shrink-0 flex-col overflow-hidden border-l border-slate-200 bg-white ${panelShadowClass} transition-none`}
 	    >
       {/* Resize Handle */}
       <div
@@ -739,6 +751,16 @@ const WaveformSidebar: React.FC<WaveformSidebarProps> = ({
           </h3>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
+            {onHide && (
+                <button
+                    onClick={onHide}
+                    className="icon-button"
+                    title="隐藏波形侧栏"
+                    aria-label="隐藏波形侧栏"
+                >
+                    <PanelRightClose size={16} />
+                </button>
+            )}
             {onOpenSettings && (
                 <button 
                     onClick={() => onOpenSettings(file.id)}
