@@ -107,22 +107,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, settings
 
             <div className={fieldClass}>
               <label className={labelClass}>
-                静音阈值 (RMS)
-              </label>
-              <input
-                type="number"
-                step="0.001"
-                min="0.001"
-                max="1.0"
-                value={formData.silenceThreshold || 0.005}
-                onChange={(e) => setFormData({ ...formData, silenceThreshold: parseFloat(e.target.value) })}
-                className={controlClass}
-              />
-              <p className={hintClass}>能量低于此值视为静音 (默认 0.005)</p>
-            </div>
-
-            <div className={fieldClass}>
-              <label className={labelClass}>
                 最小静音时长 (秒)
               </label>
               <input
@@ -136,41 +120,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, settings
               <p className={hintClass}>短于此时长的静音将被忽略 (视为连续语音)</p>
             </div>
 
-            <div className={fieldClass}>
-              <label className={labelClass}>
-                平滑窗口大小 (Smoothing Width)
-              </label>
-              <input
-                type="number"
-                step="2"
-                min="1"
-                max="15"
-                value={formData.smoothingWidth || 5}
-                onChange={(e) => {
-                    const val = parseInt(e.target.value);
-                    setFormData({ ...formData, smoothingWidth: val % 2 === 0 ? val + 1 : val });
-                }}
-                className={controlClass}
-              />
-              <p className={hintClass}>中值滤波窗口大小 (奇数)，越大越平滑</p>
-            </div>
-
-            <div className={fieldClass}>
-              <label className={labelClass}>
-                采样率 (Sample Rate)
-              </label>
-              <select
-                value={formData.sampleRate || 16000}
-                onChange={(e) => setFormData({ ...formData, sampleRate: parseInt(e.target.value) })}
-                className={controlClass}
-              >
-                <option value="8000">8000 Hz (电话音质)</option>
-                <option value="16000">16000 Hz (默认, 推荐)</option>
-                <option value="22050">22050 Hz (广播音质)</option>
-                <option value="44100">44100 Hz (CD 音质)</option>
-              </select>
-              <p className={hintClass}>影响分析的频率范围和速度</p>
-            </div>
           </div>
 
           <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50/70 p-3">

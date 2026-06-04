@@ -7,16 +7,37 @@ import { SPEAKER_COLORS } from '../constants';
 import ConfirmDialog, { ConfirmConfig } from './ConfirmDialog';
 import { extractAudioSegment } from '../utils/audioUtils';
 
-const DEFAULT_PANEL_WIDTH_RATIO = 0.5;
-const MAX_PANEL_WIDTH_RATIO = 0.6;
-const DESKTOP_ANALYSIS_CONTENT_WIDTH = 720;
-const MIN_ANALYSIS_CONTENT_WIDTH = 480;
+const DEFAULT_PANEL_WIDTH_RATIO = 0.34;
+const MAX_PANEL_WIDTH_RATIO = 0.44;
+const DESKTOP_ANALYSIS_CONTENT_WIDTH = 860;
+const MIN_ANALYSIS_CONTENT_WIDTH = 560;
 const MIN_PANEL_WIDTH = 320;
 const PANEL_WIDTH_FALLBACK = 560;
 const SINGLE_CHANNEL_WAVEFORM_HEIGHT = 240;
 const SPLIT_CHANNEL_WAVEFORM_HEIGHT = 160;
 const MIN_WAVEFORM_HEIGHT_SCALE = 0.7;
 const MAX_WAVEFORM_HEIGHT_SCALE = 2;
+const EMPTY_SPEAKER_LABELS: Record<string, string> = {};
+const WAVEFORM_LABEL_TONES = [
+  {
+    text: '#005d34',
+  },
+  {
+    text: '#7c4f00',
+  },
+  {
+    text: '#166534',
+  },
+  {
+    text: '#991b1b',
+  },
+  {
+    text: '#5b21b6',
+  },
+  {
+    text: '#9d174d',
+  },
+];
 
 function getDefaultPanelWidth(workspaceWidth?: number): number {
   if (typeof window === 'undefined') return PANEL_WIDTH_FALLBACK;
@@ -66,6 +87,41 @@ function displaySidebarSpeakerName(speaker: string, speakerLabels: Record<string
 function displaySidebarSpeakerHint(speaker: string, speakerLabels: Record<string, string>): string {
   const normalizedSpeaker = normalizeSpeakerKey(speaker);
   return speakerLabels[normalizedSpeaker]?.trim() ? normalizedSpeaker : '';
+}
+
+function getWaveformLabelTone(speaker: string) {
+  return WAVEFORM_LABEL_TONES[(speakerNumber(speaker) - 1) % WAVEFORM_LABEL_TONES.length];
+}
+
+function createWaveformRegionLabel(speaker: string, speakerLabels: Record<string, string>): HTMLElement {
+  const normalizedSpeaker = normalizeSpeakerKey(speaker);
+  const label = displaySidebarSpeakerName(normalizedSpeaker, speakerLabels);
+  const tone = getWaveformLabelTone(normalizedSpeaker);
+  const badge = document.createElement('span');
+  badge.textContent = label;
+  badge.title = label === normalizedSpeaker ? label : `${label} (${normalizedSpeaker})`;
+  badge.dataset.speakerKey = normalizedSpeaker;
+  badge.style.position = 'absolute';
+  badge.style.left = '50%';
+  badge.style.top = '8px';
+  badge.style.transform = 'translateX(-50%)';
+  badge.style.maxWidth = 'calc(100% - 16px)';
+  badge.style.minWidth = '32px';
+  badge.style.height = '22px';
+  badge.style.display = 'inline-flex';
+  badge.style.alignItems = 'center';
+  badge.style.justifyContent = 'center';
+  badge.style.padding = '0 8px';
+  badge.style.color = tone.text;
+  badge.style.fontSize = '12px';
+  badge.style.fontWeight = '700';
+  badge.style.lineHeight = '1';
+  badge.style.whiteSpace = 'nowrap';
+  badge.style.writingMode = 'horizontal-tb';
+  badge.style.overflow = 'hidden';
+  badge.style.textOverflow = 'ellipsis';
+  badge.style.pointerEvents = 'none';
+  return badge;
 }
 
 const WaveformSidebar: React.FC<WaveformSidebarProps> = ({
@@ -177,6 +233,7 @@ const WaveformSidebar: React.FC<WaveformSidebarProps> = ({
   const panelPlacementClass = 'relative';
   const panelShadowClass = 'shadow-[-4px_0_16px_rgba(15,23,42,0.08)]';
   const isCompactToolRow = effectiveWidth < 460;
+  const isCompactSegmentRow = effectiveWidth < 460;
   const hideToolLabels = effectiveWidth < 400;
   const playbackButtonClass = 'h-[22px] w-[22px] rounded-md';
   const playButtonClass = 'h-[30px] w-[30px]';
@@ -192,31 +249,52 @@ const WaveformSidebar: React.FC<WaveformSidebarProps> = ({
     ? 'ml-auto flex shrink-0 items-center justify-end gap-0.5'
     : `flex min-w-0 flex-1 items-center ${isCompactToolRow ? 'gap-0.5' : 'gap-1.5'}`;
 
-  // Handle pinch-to-zoom (Trackpad)
+  // Handle pinch-to-zoom (Trackpad) — supports both Chrome/Firefox (wheel+ctrlKey) and Safari (gesturechange)
+  const zoomRef = useRef(zoom);
+  zoomRef.current = zoom;
+  const gestureZoomRef = useRef<number | null>(null);
   useEffect(() => {
       const container = containerRef.current;
       if (!container) return;
 
+      // Chrome / Firefox: pinch generates wheel events with ctrlKey=true
       const handleWheel = (e: WheelEvent) => {
-          // Check for pinch gesture (Ctrl + Wheel on trackpads)
           if (e.ctrlKey) {
               e.preventDefault();
-              
-              // Adjust sensitivity as needed
-              const sensitivity = 2;
-              setZoom(prev => {
-                  // deltaY is negative when zooming in (pinching out)
-                  const newZoom = prev - e.deltaY * sensitivity;
-                  return Math.min(1000, Math.max(10, newZoom));
-              });
+              setZoom(prev => Math.min(1000, Math.max(10, prev - e.deltaY * 2)));
           }
       };
 
-      // Add passive: false to allow preventDefault
+      // Safari: pinch generates gesturechange events with a scale property
+      const handleGestureStart = (e: Event) => {
+          e.preventDefault();
+          gestureZoomRef.current = null;
+      };
+      const handleGestureChange = (e: Event) => {
+          e.preventDefault();
+          const ge = e as any;
+          if (typeof ge.scale !== 'number') return;
+          if (gestureZoomRef.current === null) {
+              gestureZoomRef.current = zoomRef.current;
+          }
+          const newZoom = Math.round(gestureZoomRef.current * ge.scale);
+          setZoom(Math.min(1000, Math.max(10, newZoom)));
+      };
+      const handleGestureEnd = (e: Event) => {
+          e.preventDefault();
+          gestureZoomRef.current = null;
+      };
+
       container.addEventListener('wheel', handleWheel, { passive: false });
+      container.addEventListener('gesturestart', handleGestureStart);
+      container.addEventListener('gesturechange', handleGestureChange);
+      container.addEventListener('gestureend', handleGestureEnd);
 
       return () => {
           container.removeEventListener('wheel', handleWheel);
+          container.removeEventListener('gesturestart', handleGestureStart);
+          container.removeEventListener('gesturechange', handleGestureChange);
+          container.removeEventListener('gestureend', handleGestureEnd);
       };
   }, []);
 
@@ -234,7 +312,7 @@ const WaveformSidebar: React.FC<WaveformSidebarProps> = ({
     2,
   );
   const speakerOptions = Array.from({ length: speakerCount }, (_, index) => `音色${index + 1}`);
-  const speakerLabels = settings?.speakerLabels || {};
+  const speakerLabels = settings?.speakerLabels || EMPTY_SPEAKER_LABELS;
 
   const syncRegionsFromSegments = useCallback((segments: AudioSegment[]) => {
     if (!regionsRef.current) return;
@@ -246,13 +324,13 @@ const WaveformSidebar: React.FC<WaveformSidebarProps> = ({
         id: seg.id,
         start: seg.start,
         end: seg.end,
-        content: normalizedSpeaker,
+        content: createWaveformRegionLabel(normalizedSpeaker, speakerLabels),
         color: SPEAKER_COLORS[colorIndex],
         drag: true,
         resize: true,
       });
     });
-  }, []);
+  }, [speakerLabels]);
 
   // Handle external selection (from AnalysisTable)
   useEffect(() => {
@@ -471,7 +549,7 @@ const WaveformSidebar: React.FC<WaveformSidebarProps> = ({
           id: newSeg.id,
           start: newSeg.start,
           end: newSeg.end,
-          content: newSeg.speaker,
+          content: createWaveformRegionLabel(newSeg.speaker, speakerLabels),
           color: SPEAKER_COLORS[colorIndex],
           drag: true,
           resize: true,
@@ -500,7 +578,7 @@ const WaveformSidebar: React.FC<WaveformSidebarProps> = ({
               const normalizedSpeaker = normalizeSpeakerKey(newSpeaker);
               const colorIndex = (speakerNumber(normalizedSpeaker) - 1) % SPEAKER_COLORS.length;
               region.setOptions({ 
-                  content: normalizedSpeaker,
+                  content: createWaveformRegionLabel(normalizedSpeaker, speakerLabels),
                   color: SPEAKER_COLORS[colorIndex]
               });
           }
@@ -633,7 +711,7 @@ const WaveformSidebar: React.FC<WaveformSidebarProps> = ({
               id: newSegment.id,
               start: newSegment.start,
               end: newSegment.end,
-              content: newSegment.speaker,
+              content: createWaveformRegionLabel(newSegment.speaker, speakerLabels),
               color: SPEAKER_COLORS[colorIndex],
               drag: true,
               resize: true,
@@ -864,7 +942,7 @@ const WaveformSidebar: React.FC<WaveformSidebarProps> = ({
                 <span className="font-mono">{currentTime.toFixed(1)}s / {duration.toFixed(1)}s</span>
                 <span className="truncate">{Math.round(zoom)} px/s · {waveformHeight}px</span>
             </div>
-            <div ref={containerRef} className="max-w-full overflow-x-auto" />
+            <div ref={containerRef} className="max-w-full overflow-x-auto" style={{ touchAction: 'pan-y' }} />
             
             {/* Channel Labels - L在上方声道顶部，R在下方声道顶部 */}
             {isReady && channelCount > 1 && (
@@ -935,8 +1013,8 @@ const WaveformSidebar: React.FC<WaveformSidebarProps> = ({
                               </option>
                             ))}
                           </select>
-                          {displaySidebarSpeakerHint(seg.speaker, speakerLabels) && (
-                            <span className="hidden shrink-0 text-[11px] font-medium text-slate-400 min-[460px]:inline">
+                          {!isCompactSegmentRow && displaySidebarSpeakerHint(seg.speaker, speakerLabels) && (
+                            <span className="shrink-0 text-[11px] font-medium text-slate-400">
                               {displaySidebarSpeakerHint(seg.speaker, speakerLabels)}
                             </span>
                           )}

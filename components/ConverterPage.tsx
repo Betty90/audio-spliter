@@ -7,9 +7,6 @@ import {
   FileAudio,
   Folder,
   Loader2,
-  MoreHorizontal,
-  Pause,
-  Play,
   RefreshCw,
   Settings2,
   Trash2,
@@ -39,9 +36,18 @@ interface QueueItem {
   progress?: number;
 }
 
-const formatOptions: ConversionSettings['targetFormat'][] = ['mp4', 'm4a', 'wav', 'mp3'];
+const formatOptions: ConversionSettings['targetFormat'][] = ['m4a', 'mp3', 'wav', 'aac', 'ogg', 'flac'];
 
-const selectClass = 'h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 outline-none focus:border-[var(--psbc-green)] focus:ring-2 focus:ring-[var(--psbc-green-soft)]';
+const audioFormatPresets: Record<string, Pick<ConversionSettings, 'audioCodec' | 'sampleRate' | 'channels' | 'audioBitrate'>> = {
+  m4a: { audioCodec: 'aac', sampleRate: '48000', channels: 'stereo', audioBitrate: '192' },
+  mp3: { audioCodec: 'mp3', sampleRate: '44100', channels: 'stereo', audioBitrate: '192' },
+  wav: { audioCodec: 'wav', sampleRate: '48000', channels: 'stereo', audioBitrate: 'source' },
+  aac: { audioCodec: 'aac', sampleRate: '48000', channels: 'stereo', audioBitrate: '192' },
+  ogg: { audioCodec: 'opus', sampleRate: '48000', channels: 'stereo', audioBitrate: '128' },
+  flac: { audioCodec: 'flac', sampleRate: '48000', channels: 'stereo', audioBitrate: 'source' },
+};
+
+const selectClass = 'h-8 w-full rounded-md border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-700 outline-none focus:border-[var(--psbc-green)] focus:ring-2 focus:ring-[var(--psbc-green-soft)]';
 
 function makeId(): string {
   return `queue-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
@@ -79,7 +85,7 @@ const ConverterPage: React.FC<ConverterPageProps> = ({
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [isConverting, setIsConverting] = useState(false);
 
-  const targetFormat = conversionSettings.targetFormat;
+  const targetFormat = formatOptions.includes(conversionSettings.targetFormat) ? conversionSettings.targetFormat : 'm4a';
 
   const metrics = useMemo(() => {
     const success = queue.filter(item => item.status === 'success').length;
@@ -173,9 +179,17 @@ const ConverterPage: React.FC<ConverterPageProps> = ({
     if (directory) onOutputPolicyChange({ ...outputPolicy, directory });
   };
 
+  const applyTargetFormat = (format: ConversionSettings['targetFormat']) => {
+    onConversionSettingsChange({
+      ...conversionSettings,
+      targetFormat: format,
+      ...audioFormatPresets[format],
+    });
+  };
+
   return (
-    <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_312px] gap-4 overflow-hidden p-5">
-      <div className="flex min-w-0 flex-col gap-4 overflow-hidden">
+    <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_284px] gap-3 overflow-hidden p-4">
+      <div className="flex min-w-0 flex-col gap-3 overflow-hidden">
         <div className="grid grid-cols-4 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
           {[
             ['待转换', metrics.waiting, '个文件'],
@@ -183,17 +197,50 @@ const ConverterPage: React.FC<ConverterPageProps> = ({
             ['失败', metrics.failed, '个文件'],
             ['预计总大小', formatBytes(metrics.size), '估算'],
           ].map(([label, value, hint], index) => (
-            <div key={label} className={`p-5 ${index > 0 ? 'border-l border-slate-200' : ''}`}>
+            <div key={label} className={`px-4 py-3 ${index > 0 ? 'border-l border-slate-200' : ''}`}>
               <div className="text-xs font-bold text-slate-500">{label}</div>
-              <div className="mt-2 text-2xl font-bold text-slate-950">{value}</div>
+              <div className="mt-1 text-xl font-bold text-slate-950">{value}</div>
               <div className="mt-1 text-xs text-slate-500">{hint}</div>
             </div>
           ))}
         </div>
 
+        <div
+          data-testid="converter-output-toolbar"
+          className="flex min-w-0 items-end gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm"
+        >
+          <Field label="输出文件夹" className="min-w-[180px] flex-[1.4]">
+            <div className="flex gap-1.5">
+              <input className={selectClass} value={outputPolicy.directory || 'Downloads'} readOnly />
+              <button onClick={chooseOutputDirectory} className="icon-button h-8 w-8 shrink-0 border border-slate-200" title="选择目录">
+                <Folder size={15} />
+              </button>
+            </div>
+          </Field>
+          <Field label="文件命名" className="min-w-[130px] flex-1">
+            <select className={selectClass} value={outputPolicy.naming} onChange={e => onOutputPolicyChange({ ...outputPolicy, naming: e.target.value as OutputPolicy['naming'] })}>
+              <option value="preserve">保留原名</option>
+              <option value="prefix">converted_ 前缀</option>
+              <option value="suffix">_converted 后缀</option>
+            </select>
+          </Field>
+          <Field label="已存在文件" className="min-w-[120px] flex-1">
+            <select className={selectClass} value={outputPolicy.existingFile} onChange={e => onOutputPolicyChange({ ...outputPolicy, existingFile: e.target.value as OutputPolicy['existingFile'] })}>
+              <option value="auto-rename">自动重命名</option>
+              <option value="overwrite">覆盖</option>
+            </select>
+          </Field>
+          <Field label="完成后" className="min-w-[120px] flex-1">
+            <select className={selectClass} value={outputPolicy.afterConversion} onChange={e => onOutputPolicyChange({ ...outputPolicy, afterConversion: e.target.value as OutputPolicy['afterConversion'] })}>
+              <option value="none">无操作</option>
+              <option value="reveal">显示文件夹</option>
+            </select>
+          </Field>
+        </div>
+
         <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)] overflow-hidden">
           <section className="flex min-w-0 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-            <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+            <div className="flex items-center justify-between border-b border-slate-200 px-3 py-2.5">
               <div className="flex items-center gap-2 text-sm font-bold text-slate-800">
                 <RefreshCw size={17} className={isConverting ? 'animate-spin text-[var(--psbc-green)]' : ''} />
                 转换队列 ({queue.length})
@@ -214,13 +261,13 @@ const ConverterPage: React.FC<ConverterPageProps> = ({
               <table className="w-full text-left text-sm">
                 <thead className="sticky top-0 z-10 border-b border-slate-200 bg-slate-50 text-xs font-bold text-slate-500">
                   <tr>
-                    <th className="w-10 px-4 py-3"><input type="checkbox" /></th>
-                    <th className="px-4 py-3">文件名</th>
-                    <th className="px-4 py-3">源格式</th>
-                    <th className="px-4 py-3">大小</th>
-                    <th className="px-4 py-3">目标格式</th>
-                    <th className="px-4 py-3">状态</th>
-                    <th className="px-4 py-3 text-right">操作</th>
+                    <th className="w-9 px-3 py-2.5"><input type="checkbox" /></th>
+                    <th className="px-3 py-2.5">文件名</th>
+                    <th className="px-3 py-2.5">源格式</th>
+                    <th className="px-3 py-2.5">大小</th>
+                    <th className="px-3 py-2.5">目标格式</th>
+                    <th className="px-3 py-2.5">状态</th>
+                    <th className="px-3 py-2.5 text-right">操作</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -230,25 +277,25 @@ const ConverterPage: React.FC<ConverterPageProps> = ({
                     </tr>
                   ) : queue.map(item => (
                     <tr key={item.id} className="hover:bg-slate-50">
-                      <td className="px-4 py-3"><input type="checkbox" /></td>
-                      <td className="max-w-[280px] px-4 py-3">
-                        <div className="flex items-center gap-3">
+                      <td className="px-3 py-2"><input type="checkbox" /></td>
+                      <td className="max-w-[280px] px-3 py-2">
+                        <div className="flex items-center gap-2">
                           <FileAudio size={17} className="text-slate-500" />
                           <span className="truncate font-semibold text-slate-800" title={item.file.name}>{item.file.name}</span>
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-slate-600">{item.sourceFormat}</td>
-                      <td className="px-4 py-3 text-slate-600">{formatBytes(item.file.size)}</td>
-                      <td className="px-4 py-3">
+                      <td className="px-3 py-2 text-slate-600">{item.sourceFormat}</td>
+                      <td className="px-3 py-2 text-slate-600">{formatBytes(item.file.size)}</td>
+                      <td className="px-3 py-2">
                         <select
                           value={targetFormat}
-                          onChange={(event) => onConversionSettingsChange({ ...conversionSettings, targetFormat: event.target.value as ConversionSettings['targetFormat'] })}
+                          onChange={(event) => applyTargetFormat(event.target.value as ConversionSettings['targetFormat'])}
                           className="h-8 rounded-md border border-slate-200 bg-white px-2 text-xs font-bold text-slate-700"
                         >
                           {formatOptions.map(format => <option key={format} value={format}>{format.toUpperCase()}</option>)}
                         </select>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-3 py-2">
                         {item.status === 'converting' && (
                           <span className="flex items-center gap-2 text-xs font-bold text-[var(--psbc-green)]">
                             <Loader2 size={14} className="animate-spin" /> 转换中 {item.progress || 0}%
@@ -258,7 +305,7 @@ const ConverterPage: React.FC<ConverterPageProps> = ({
                         {item.status === 'error' && <span className="flex max-w-[180px] items-center gap-2 truncate text-xs font-bold text-red-600"><AlertCircle size={14} /> {item.error}</span>}
                         {item.status === 'idle' && <span className="text-xs font-bold text-slate-500">准备就绪</span>}
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-3 py-2">
                         <div className="flex justify-end gap-2">
                           {item.convertedUrl && (
                             <a href={item.convertedUrl} download={buildOutputName(item, outputPolicy, targetFormat)} className="icon-button" title="下载">
@@ -270,9 +317,8 @@ const ConverterPage: React.FC<ConverterPageProps> = ({
                               <Folder size={16} />
                             </button>
                           )}
-                          {item.status === 'converting' ? <Pause size={16} className="mt-2 text-slate-400" /> : <Play size={16} className="mt-2 text-slate-400" />}
                           <button onClick={() => setQueue(prev => prev.filter(next => next.id !== item.id))} className="icon-button" title="移除">
-                            <MoreHorizontal size={16} />
+                            <Trash2 size={16} />
                           </button>
                         </div>
                       </td>
@@ -282,7 +328,7 @@ const ConverterPage: React.FC<ConverterPageProps> = ({
               </table>
             </div>
 
-            <div className="flex items-center justify-between border-t border-slate-200 bg-slate-50 px-4 py-3">
+            <div className="flex items-center justify-between border-t border-slate-200 bg-slate-50 px-3 py-2.5">
               <div className="text-xs text-slate-500">共 {queue.length} 条 · 并发任务数 2</div>
               <button
                 onClick={handleConvertAll}
@@ -298,22 +344,22 @@ const ConverterPage: React.FC<ConverterPageProps> = ({
       </div>
 
       <aside className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-        <div className="flex items-center justify-between border-b border-slate-200 px-4 py-4">
+        <div className="flex items-center justify-between border-b border-slate-200 px-3 py-3">
           <div className="flex items-center gap-2 text-sm font-bold text-slate-900">
             <Settings2 size={17} />
-            输出设置
+            音频设置
           </div>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto p-4">
-          <div className="mb-5">
+        <div className="min-h-0 flex-1 overflow-y-auto p-3">
+          <div className="mb-4">
             <div className="mb-2 text-xs font-bold text-slate-600">输出格式</div>
-            <div className="grid grid-cols-4 gap-2">
+            <div className="grid grid-cols-3 gap-1.5">
               {formatOptions.map(format => (
                 <button
                   key={format}
-                  onClick={() => onConversionSettingsChange({ ...conversionSettings, targetFormat: format })}
-                  className={`relative h-9 rounded-md border text-sm font-bold ${
+                  onClick={() => applyTargetFormat(format)}
+                  className={`relative h-8 rounded-md border text-xs font-bold ${
                     targetFormat === format
                       ? 'border-[var(--psbc-green)] bg-[var(--psbc-green-soft)] text-[var(--psbc-green)]'
                       : 'border-slate-200 text-slate-700 hover:bg-slate-50'
@@ -325,48 +371,14 @@ const ConverterPage: React.FC<ConverterPageProps> = ({
             </div>
           </div>
 
-          <SettingsGroup title="视频设置">
-            <Field label="视频编码">
-              <select className={selectClass} value={conversionSettings.videoCodec} onChange={e => onConversionSettingsChange({ ...conversionSettings, videoCodec: e.target.value as ConversionSettings['videoCodec'] })}>
-                <option value="h264">H.264（推荐）</option>
-                <option value="h265">H.265</option>
-                <option value="vp9">VP9</option>
-                <option value="source">与源文件一致</option>
-              </select>
-            </Field>
-            <Field label="分辨率">
-              <select className={selectClass} value={conversionSettings.resolution} onChange={e => onConversionSettingsChange({ ...conversionSettings, resolution: e.target.value as ConversionSettings['resolution'] })}>
-                <option value="source">与源文件一致</option>
-                <option value="1920x1080">1080p</option>
-                <option value="1280x720">720p</option>
-                <option value="854x480">480p</option>
-              </select>
-            </Field>
-            <Field label="帧率">
-              <select className={selectClass} value={conversionSettings.frameRate} onChange={e => onConversionSettingsChange({ ...conversionSettings, frameRate: e.target.value as ConversionSettings['frameRate'] })}>
-                <option value="source">与源文件一致</option>
-                <option value="60">60 fps</option>
-                <option value="30">30 fps</option>
-                <option value="25">25 fps</option>
-                <option value="24">24 fps</option>
-              </select>
-            </Field>
-            <Field label="视频码率">
-              <select className={selectClass} value={conversionSettings.videoBitrate} onChange={e => onConversionSettingsChange({ ...conversionSettings, videoBitrate: e.target.value as ConversionSettings['videoBitrate'] })}>
-                <option value="1500">1500 kbps（推荐）</option>
-                <option value="2500">2500 kbps</option>
-                <option value="5000">5000 kbps</option>
-                <option value="source">与源文件一致</option>
-              </select>
-            </Field>
-          </SettingsGroup>
-
           <SettingsGroup title="音频设置">
             <Field label="音频编码">
               <select className={selectClass} value={conversionSettings.audioCodec} onChange={e => onConversionSettingsChange({ ...conversionSettings, audioCodec: e.target.value as ConversionSettings['audioCodec'] })}>
                 <option value="aac">AAC</option>
                 <option value="mp3">MP3</option>
                 <option value="wav">WAV PCM</option>
+                <option value="opus">Opus</option>
+                <option value="flac">FLAC</option>
                 <option value="source">与源文件一致</option>
               </select>
             </Field>
@@ -374,6 +386,7 @@ const ConverterPage: React.FC<ConverterPageProps> = ({
               <select className={selectClass} value={conversionSettings.sampleRate} onChange={e => onConversionSettingsChange({ ...conversionSettings, sampleRate: e.target.value as ConversionSettings['sampleRate'] })}>
                 <option value="48000">48 kHz</option>
                 <option value="44100">44.1 kHz</option>
+                <option value="22050">22.05 kHz</option>
                 <option value="16000">16 kHz</option>
                 <option value="source">与源文件一致</option>
               </select>
@@ -389,6 +402,8 @@ const ConverterPage: React.FC<ConverterPageProps> = ({
             </Field>
             <Field label="音频码率">
               <select className={selectClass} value={conversionSettings.audioBitrate} onChange={e => onConversionSettingsChange({ ...conversionSettings, audioBitrate: e.target.value as ConversionSettings['audioBitrate'] })}>
+                <option value="96">96 kbps</option>
+                <option value="128">128 kbps</option>
                 <option value="192">192 kbps（推荐）</option>
                 <option value="256">256 kbps</option>
                 <option value="320">320 kbps</option>
@@ -396,63 +411,23 @@ const ConverterPage: React.FC<ConverterPageProps> = ({
               </select>
             </Field>
           </SettingsGroup>
-
-          <SettingsGroup title="输出选项">
-            <Field label="输出文件夹">
-              <div className="flex gap-2">
-                <input className={selectClass} value={outputPolicy.directory || 'Downloads'} readOnly />
-                <button onClick={chooseOutputDirectory} className="icon-button shrink-0 border border-slate-200" title="选择目录">
-                  <Folder size={16} />
-                </button>
-              </div>
-            </Field>
-            <Field label="文件命名">
-              <select className={selectClass} value={outputPolicy.naming} onChange={e => onOutputPolicyChange({ ...outputPolicy, naming: e.target.value as OutputPolicy['naming'] })}>
-                <option value="preserve">保留原名</option>
-                <option value="prefix">添加 converted_ 前缀</option>
-                <option value="suffix">添加 _converted 后缀</option>
-              </select>
-            </Field>
-            <Field label="已存在文件">
-              <select className={selectClass} value={outputPolicy.existingFile} onChange={e => onOutputPolicyChange({ ...outputPolicy, existingFile: e.target.value as OutputPolicy['existingFile'] })}>
-                <option value="auto-rename">自动重命名</option>
-                <option value="overwrite">覆盖</option>
-              </select>
-            </Field>
-            <Field label="转换完成后">
-              <select className={selectClass} value={outputPolicy.afterConversion} onChange={e => onOutputPolicyChange({ ...outputPolicy, afterConversion: e.target.value as OutputPolicy['afterConversion'] })}>
-                <option value="none">无操作</option>
-                <option value="reveal">在文件夹中显示</option>
-              </select>
-            </Field>
-          </SettingsGroup>
         </div>
 
-        <div className="border-t border-slate-200 p-4">
-          <button
-            onClick={handleConvertAll}
-            disabled={isConverting || queue.length === 0 || queue.every(item => item.status === 'success')}
-            className="flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-[var(--psbc-green)] text-sm font-bold text-white shadow-sm hover:bg-[var(--psbc-green-dark)] disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <RefreshCw size={17} className={isConverting ? 'animate-spin' : ''} />
-            开始转换
-          </button>
-        </div>
       </aside>
     </div>
   );
 };
 
 const SettingsGroup: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
-  <section className="mb-6">
-    <h3 className="mb-3 text-xs font-bold text-slate-700">{title}</h3>
-    <div className="space-y-3">{children}</div>
+  <section className="mb-4">
+    <h3 className="mb-2 text-xs font-bold text-slate-700">{title}</h3>
+    <div className="space-y-2.5">{children}</div>
   </section>
 );
 
-const Field: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
-  <label className="block">
-    <span className="mb-1.5 block text-xs font-semibold text-slate-500">{label}</span>
+const Field: React.FC<{ label: string; children: React.ReactNode; className?: string }> = ({ label, children, className = '' }) => (
+  <label className={`block ${className}`}>
+    <span className="mb-1 block text-[11px] font-semibold text-slate-500">{label}</span>
     {children}
   </label>
 );

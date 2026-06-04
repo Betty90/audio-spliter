@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 import unittest
 
 
@@ -124,6 +125,62 @@ class RedesignInterfacesTest(unittest.TestCase):
         self.assertIn("ALLOWED_VIDEO_CODECS", backend)
         self.assertIn("ALLOWED_AUDIO_CODECS", backend)
         self.assertIn("ALLOWED_CHANNELS", backend)
+
+    def test_converter_uses_audio_only_formats_and_top_output_toolbar(self):
+        app = read("App.tsx")
+        converter = read("components/ConverterPage.tsx")
+
+        self.assertIn("targetFormat: 'm4a'", app)
+        self.assertIn("const formatOptions: ConversionSettings['targetFormat'][] = ['m4a', 'mp3', 'wav', 'aac', 'ogg', 'flac']", converter)
+        self.assertNotIn("['mp4', 'm4a', 'wav', 'mp3']", converter)
+        self.assertIn("const audioFormatPresets", converter)
+        for preset in [
+            "m4a: { audioCodec: 'aac', sampleRate: '48000', channels: 'stereo', audioBitrate: '192' }",
+            "mp3: { audioCodec: 'mp3', sampleRate: '44100', channels: 'stereo', audioBitrate: '192' }",
+            "wav: { audioCodec: 'wav', sampleRate: '48000', channels: 'stereo', audioBitrate: 'source' }",
+            "aac: { audioCodec: 'aac', sampleRate: '48000', channels: 'stereo', audioBitrate: '192' }",
+            "ogg: { audioCodec: 'opus', sampleRate: '48000', channels: 'stereo', audioBitrate: '128' }",
+            "flac: { audioCodec: 'flac', sampleRate: '48000', channels: 'stereo', audioBitrate: 'source' }",
+        ]:
+            self.assertIn(preset, converter)
+        self.assertIn("data-testid=\"converter-output-toolbar\"", converter)
+        self.assertLess(converter.index("data-testid=\"converter-output-toolbar\""), converter.index("转换队列"))
+        self.assertNotIn("<SettingsGroup title=\"视频设置\">", converter)
+        self.assertNotIn("视频编码", converter)
+        self.assertNotIn("分辨率", converter)
+        self.assertNotIn("帧率", converter)
+        self.assertNotIn("视频码率", converter)
+
+    def test_converter_has_single_start_button_and_clear_row_actions(self):
+        converter = read("components/ConverterPage.tsx")
+
+        self.assertEqual(converter.count("onClick={handleConvertAll}"), 1)
+        self.assertNotIn("MoreHorizontal", converter)
+        self.assertNotIn("Pause", converter)
+        self.assertNotIn("Play", converter)
+        self.assertIn("title=\"移除\"", converter)
+        self.assertIn("<Trash2 size={16} />", converter)
+
+    def test_converter_output_workflow_uses_real_output_directory(self):
+        app = read("App.tsx")
+        converter = read("components/ConverterPage.tsx")
+        main = read("electron/main.ts")
+
+        self.assertIn("function normalizeOutputPolicy", app)
+        self.assertIn("directory: policy?.directory || fallbackDirectory", app)
+        self.assertIn("normalizeOutputPolicy(persisted?.outputPolicy, downloads || '')", app)
+        self.assertIn("window.electron.getDownloadsDirectory?.()", app)
+        self.assertIn("window.electron.saveFile", converter)
+        self.assertIn("directory: outputPolicy.directory", converter)
+        self.assertIn("fileName: outputName", converter)
+        self.assertIn("existingFile: outputPolicy.existingFile", converter)
+        self.assertIn("outputPolicy.afterConversion === 'reveal'", converter)
+        self.assertIn("window.electron.revealInFinder(saved.path)", converter)
+        self.assertIn("handleDownloadAll", converter)
+        self.assertIn("firstSaved?.outputPath", converter)
+        self.assertIn("window.electron.revealInFinder(firstSaved.outputPath)", converter)
+        self.assertIn("resolveAvailablePath(directory, options.fileName)", main)
+        self.assertIn("options.existingFile === 'overwrite'", main)
 
     def test_sidebar_file_library_supports_local_collections_and_trash_actions(self):
         types = read("types.ts")
@@ -286,37 +343,36 @@ class RedesignInterfacesTest(unittest.TestCase):
         self.assertNotIn("批量格式转换", app)
         self.assertNotIn("音频分割", app)
 
-        self.assertIn("DEFAULT_PANEL_WIDTH_RATIO = 0.5", waveform)
-        self.assertIn("MIN_ANALYSIS_CONTENT_WIDTH = 800", waveform)
-        self.assertIn("MIN_PANEL_WIDTH = 360", waveform)
+        self.assertIn("DEFAULT_PANEL_WIDTH_RATIO = 0.34", waveform)
+        self.assertIn("MAX_PANEL_WIDTH_RATIO = 0.44", waveform)
+        self.assertIn("DESKTOP_ANALYSIS_CONTENT_WIDTH = 860", app)
+        self.assertIn("COMPACT_ANALYSIS_CONTENT_WIDTH = 560", app)
+        self.assertIn("DESKTOP_ANALYSIS_CONTENT_WIDTH = 860", waveform)
+        self.assertIn("MIN_ANALYSIS_CONTENT_WIDTH = 560", waveform)
+        self.assertIn("MIN_PANEL_WIDTH = 320", waveform)
         self.assertIn("workspaceWidth - MIN_ANALYSIS_CONTENT_WIDTH", waveform)
         self.assertIn("const viewportMaxWidth = Math.round(window.innerWidth * MAX_PANEL_WIDTH_RATIO)", waveform)
         self.assertIn("Math.min(viewportMaxWidth, workspaceWidth)", waveform)
         self.assertIn("hasMeasuredWorkspaceRef", waveform)
         self.assertIn("!hasMeasuredWorkspaceRef.current && !userResizedRef.current", waveform)
-        self.assertIn("style={{ width: effectiveWidth }}", waveform)
+        self.assertIn("style={panelStyle}", waveform)
         self.assertNotIn("transition-all", app)
 
-    def test_analysis_sidebar_only_overlays_when_middle_would_be_too_narrow(self):
+    def test_analysis_workspace_prioritizes_middle_with_smaller_sidebars(self):
         app = read("App.tsx")
+        sidebar = read("components/AudioFileSidebar.tsx")
         waveform = read("components/WaveformSidebar.tsx")
 
-        self.assertIn("ANALYSIS_CONTENT_WIDTH = 800", app)
-        self.assertIn("const [isAnalysisSidebarOverlaying", app)
-        self.assertIn("style={isAnalysisSidebarOverlaying", app)
-        self.assertIn("width: ANALYSIS_CONTENT_WIDTH", app)
-        self.assertIn("onOverlayChange={setIsAnalysisSidebarOverlaying}", app)
+        self.assertIn("w-[248px]", sidebar)
+        self.assertIn("flexBasis: DESKTOP_ANALYSIS_CONTENT_WIDTH", app)
+        self.assertIn("minWidth: COMPACT_ANALYSIS_CONTENT_WIDTH", app)
         self.assertIn("relative flex min-h-0 flex-1 overflow-hidden", app)
-        self.assertIn("onOverlayChange?: (isOverlaying: boolean) => void", waveform)
-        self.assertIn("onOverlayChange(shouldOverlay)", waveform)
         self.assertNotIn("EMPTY_PANEL_WIDTH", waveform)
         self.assertIn("getBoundingClientRect()", waveform)
-        self.assertIn("const effectiveWidth = workspaceWidth > 0 ? Math.min(width, workspaceWidth) : width", waveform)
-        self.assertIn("shouldOverlay", waveform)
-        self.assertIn("workspaceWidth - effectiveWidth < MIN_ANALYSIS_CONTENT_WIDTH", waveform)
-        self.assertIn("shouldOverlay ? 'absolute right-0 top-0 bottom-0", waveform)
-        self.assertNotIn("left: MIN_ANALYSIS_CONTENT_WIDTH", waveform)
-        self.assertIn(": 'relative", waveform)
+        self.assertIn("const maxInlineWidth = workspaceWidth > 0 ? getMaxPanelWidth(workspaceWidth) : width", waveform)
+        self.assertIn("const effectiveWidth = workspaceWidth > 0 ? Math.min(width, maxInlineWidth) : width", waveform)
+        self.assertIn("const panelPlacementClass = 'relative'", waveform)
+        self.assertNotIn("shouldOverlay", waveform)
 
     def test_analysis_table_uses_segment_interval_columns_without_play_icon(self):
         table = read("components/AnalysisTable.tsx")
@@ -350,13 +406,58 @@ class RedesignInterfacesTest(unittest.TestCase):
         self.assertIn(">备注<", table)
         self.assertIn("row.remark || '-'", table)
         self.assertIn("px-2.5 py-2.5", table)
-        self.assertIn('w-[180px] px-2.5 py-2.5">片段间隔', table)
-        self.assertIn('w-[80px] px-2.5 py-2.5">备注', table)
+        self.assertIn("w-[180px]", table)
+        self.assertIn("px-2.5 py-2.5`}>片段间隔", table)
+        self.assertIn("w-[80px]", table)
+        self.assertIn("px-2.5 py-2.5`}>备注", table)
         self.assertIn("latencyExtremes", table)
         self.assertIn("isBestLatency", table)
         self.assertIn("isWorstLatency", table)
         self.assertIn("text-emerald-700", table)
-        self.assertIn("text-amber-900", table)
+        self.assertIn("text-red-700 font-extrabold", table)
+
+    def test_analysis_latency_cards_and_threshold_highlighting_are_interactive(self):
+        app = read("App.tsx")
+        table = read("components/AnalysisTable.tsx")
+        styles = read("src/styles.css")
+
+        self.assertIn("label: '间隔数'", app)
+        self.assertIn("hint: '片段间隔'", app)
+        self.assertNotIn("label: '片段数'", app)
+        self.assertIn("analysisStatRows", app)
+        self.assertIn("maxRow", app)
+        self.assertIn("minRow", app)
+        self.assertIn("targetSegmentId", app)
+        self.assertIn("setActiveSegmentId(targetSegmentId || null)", app)
+        self.assertIn("tone: 'red'", app)
+        self.assertIn("bg-red-50 text-red-700 ring-red-100", app)
+
+        self.assertIn("SlidersHorizontal", table)
+        self.assertIn("min-w-0 cursor-pointer truncate", table)
+        self.assertIn("latencySettingsButtonRef", table)
+        self.assertIn("latencySettingsMenuRef", table)
+        self.assertIn("latencySettingsPosition", table)
+        self.assertIn("updateLatencySettingsPosition", table)
+        self.assertIn("window.addEventListener('pointerdown', handlePointerDown)", table)
+        self.assertIn("window.addEventListener('keydown', handleKeyDown)", table)
+        self.assertIn("event.key === 'Escape'", table)
+        self.assertIn("className=\"fixed z-50 w-56", table)
+        self.assertIn("style={{ top: latencySettingsPosition.top, left: latencySettingsPosition.left }}", table)
+        self.assertIn("overflow-x-auto", table)
+        self.assertNotIn("overflow-visible", table)
+        self.assertIn("<SlidersHorizontal size={18} strokeWidth={2.2} />", table)
+        self.assertIn("latencyHighlightThresholds", table)
+        self.assertIn("setLatencyHighlightThresholds", table)
+        self.assertIn("low: 1.5", table)
+        self.assertIn("high: 3", table)
+        self.assertIn("row.latency > latencyHighlightThresholds.high", table)
+        self.assertIn("row.latency < latencyHighlightThresholds.low", table)
+        self.assertIn("最高和最低时延会始终优先高亮。", table)
+        self.assertNotIn("row.latency > 3.0", table)
+        self.assertIn(".tool-button:active", styles)
+        self.assertIn("cursor: pointer", styles)
+        self.assertIn("box-shadow: inset", styles)
+        self.assertNotIn("transform: translateY(1px)", styles)
 
     def test_analysis_segment_remarks_live_update_table_rows(self):
         app = read("App.tsx")
@@ -400,6 +501,9 @@ class RedesignInterfacesTest(unittest.TestCase):
         self.assertIn("const toolGroupClass = hideToolLabels", waveform)
         self.assertIn("flex min-w-0 flex-1 items-center", waveform)
         self.assertIn("const toolButtonClass = hideToolLabels", waveform)
+        self.assertIn("const isCompactSegmentRow = effectiveWidth < 460", waveform)
+        self.assertIn("!isCompactSegmentRow && displaySidebarSpeakerHint", waveform)
+        self.assertNotIn("min-[460px]:inline", waveform)
         self.assertIn("tool-button whitespace-nowrap", waveform)
         self.assertIn("!hideToolLabels &&", waveform)
         self.assertNotIn("sticky top-0", waveform)
@@ -413,6 +517,32 @@ class RedesignInterfacesTest(unittest.TestCase):
         self.assertIn("speakerLabels[speaker]?.trim() || speaker", waveform)
         self.assertIn("speakerLabels[normalizedSpeaker]?.trim() ? normalizedSpeaker : ''", waveform)
         self.assertIn("seg.remark || '添加备注'", waveform)
+
+    def test_waveform_region_labels_use_mapped_horizontal_badges(self):
+        waveform = read("components/WaveformSidebar.tsx")
+
+        self.assertIn("function createWaveformRegionLabel", waveform)
+        self.assertIn("function getWaveformLabelTone", waveform)
+        self.assertIn("displaySidebarSpeakerName(normalizedSpeaker, speakerLabels)", waveform)
+        self.assertIn("const tone = getWaveformLabelTone(normalizedSpeaker)", waveform)
+        self.assertIn("dataset.speakerKey = normalizedSpeaker", waveform)
+        self.assertIn("left = '50%'", waveform)
+        self.assertIn("transform = 'translateX(-50%)'", waveform)
+        self.assertIn("color = tone.text", waveform)
+        self.assertIn("whiteSpace = 'nowrap'", waveform)
+        self.assertIn("writingMode = 'horizontal-tb'", waveform)
+        self.assertIn("textOverflow = 'ellipsis'", waveform)
+        self.assertIn("content: createWaveformRegionLabel(normalizedSpeaker, speakerLabels)", waveform)
+        self.assertIn("content: createWaveformRegionLabel(newSeg.speaker, speakerLabels)", waveform)
+        self.assertIn("content: createWaveformRegionLabel(newSegment.speaker, speakerLabels)", waveform)
+        self.assertNotIn("content: normalizedSpeaker,", waveform)
+        self.assertNotIn("content: newSeg.speaker,", waveform)
+        self.assertNotIn("content: newSegment.speaker,", waveform)
+        self.assertNotIn("left = '8px'", waveform)
+        self.assertNotIn("background = tone.background", waveform)
+        self.assertNotIn("border = `1px solid ${tone.border}`", waveform)
+        self.assertNotIn("boxShadow", waveform)
+        self.assertNotIn("textShadow", waveform)
 
     def test_speaker_label_mapping_drives_table_and_sidebar_display(self):
         types = read("types.ts")
@@ -438,6 +568,27 @@ class RedesignInterfacesTest(unittest.TestCase):
         self.assertIn("<select", waveform)
         self.assertIn("音色映射", settings)
         self.assertIn("updateSpeakerLabel", settings)
+
+    def test_unused_analysis_settings_are_removed_from_ui_and_api(self):
+        types = read("types.ts")
+        constants = read("constants.ts")
+        settings = read("components/SettingsModal.tsx")
+        api_service = read("services/apiService.ts")
+        backend = read("backend/server.py")
+        app_settings = re.search(r"export interface AppSettings \{(?P<body>.*?)\n\}", types, re.S).group("body")
+        analyze_audio = re.search(r"export const analyzeAudio = async \((?P<body>.*?)\n\};", api_service, re.S).group("body")
+        upload_file = re.search(r"def upload_file\(\):(?P<body>.*?)(?=\n\n@app.route)", backend, re.S).group("body")
+
+        for removed in ("silenceThreshold", "smoothingWidth", "sampleRate"):
+            self.assertNotIn(removed, app_settings)
+            self.assertNotIn(removed, constants)
+            self.assertNotIn(removed, settings)
+
+        for removed in ("noiseThreshold", "smoothingWidth", "sampleRate"):
+            self.assertNotIn(removed, analyze_audio)
+
+        for removed in ("noise_threshold", "hop_length", "smoothing_width", "sample_rate"):
+            self.assertNotIn(removed, upload_file)
 
 
 if __name__ == "__main__":

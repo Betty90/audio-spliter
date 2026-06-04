@@ -292,11 +292,6 @@ def upload_file():
     try:
         n_speakers = int(request.form.get("numSpeakers", 2))
         min_duration = float(request.form.get("minDuration", 0.5))
-        # 前端传来的可能是字符串，转为浮点
-        noise_threshold = float(request.form.get("noiseThreshold", 0.005))
-        hop_length = int(request.form.get("hopLength", 512))
-        smoothing_width = int(request.form.get("smoothingWidth", 5))
-        sample_rate = int(request.form.get("sampleRate", 16000))
         min_silence_duration = float(request.form.get("minSilenceDuration", 0.1))
     except ValueError:
         return jsonify({"error": "配置参数无效"}), 400

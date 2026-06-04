@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { ArrowRight, Copy, FileDown, FileJson, Table as TableIcon } from 'lucide-react';
+import { ArrowRight, Copy, FileDown, FileJson, SlidersHorizontal, Table as TableIcon } from 'lucide-react';
 import { AudioFile, LatencyRow } from '../types';
 import { formatTime } from '../utils/timeUtils';
 
@@ -45,10 +45,29 @@ const AnalysisTable: React.FC<AnalysisTableProps> = ({ files, mode, onModeChange
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [lastInteractedId, setLastInteractedId] = useState<string | null>(null);
   const [containerWidth, setContainerWidth] = useState(0);
+  const [isLatencySettingsOpen, setIsLatencySettingsOpen] = useState(false);
+  const [latencyHighlightThresholds, setLatencyHighlightThresholds] = useState({ low: 1.5, high: 3 });
+  const [latencySettingsPosition, setLatencySettingsPosition] = useState<{ top: number; left: number } | null>(null);
   const shellRef = React.useRef<HTMLDivElement>(null);
   const tableRef = React.useRef<HTMLDivElement>(null);
+  const latencySettingsButtonRef = React.useRef<HTMLButtonElement>(null);
+  const latencySettingsMenuRef = React.useRef<HTMLDivElement>(null);
   const isCompact = containerWidth > 0 && containerWidth < STACKED_TOOLBAR_WIDTH;
   const isVeryCompact = containerWidth > 0 && containerWidth < VERY_COMPACT_TABLE_WIDTH;
+
+  const updateLatencySettingsPosition = React.useCallback(() => {
+    const button = latencySettingsButtonRef.current;
+    if (!button) return;
+
+    const rect = button.getBoundingClientRect();
+    const menuWidth = 224;
+    const margin = 8;
+    const left = Math.max(margin, Math.min(rect.right - menuWidth, window.innerWidth - menuWidth - margin));
+    setLatencySettingsPosition({
+      top: rect.bottom + margin,
+      left,
+    });
+  }, []);
 
   React.useEffect(() => {
     const shell = shellRef.current;
@@ -85,6 +104,39 @@ const AnalysisTable: React.FC<AnalysisTableProps> = ({ files, mode, onModeChange
         }
     }
   }, [activeSegmentId]);
+
+  React.useEffect(() => {
+    if (!isLatencySettingsOpen) return;
+
+    updateLatencySettingsPosition();
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target as Node | null;
+      if (!target) return;
+      if (latencySettingsButtonRef.current?.contains(target) || latencySettingsMenuRef.current?.contains(target)) {
+        return;
+      }
+      setIsLatencySettingsOpen(false);
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsLatencySettingsOpen(false);
+      }
+    };
+
+    window.addEventListener('pointerdown', handlePointerDown);
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('resize', updateLatencySettingsPosition);
+    window.addEventListener('scroll', updateLatencySettingsPosition, true);
+
+    return () => {
+      window.removeEventListener('pointerdown', handlePointerDown);
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('resize', updateLatencySettingsPosition);
+      window.removeEventListener('scroll', updateLatencySettingsPosition, true);
+    };
+  }, [isLatencySettingsOpen, updateLatencySettingsPosition]);
 
   const dataRows: LatencyRow[] = useMemo(() => {
     const rows: LatencyRow[] = [];
@@ -221,6 +273,14 @@ const AnalysisTable: React.FC<AnalysisTableProps> = ({ files, mode, onModeChange
     });
   };
 
+  const updateLatencyThreshold = (key: 'low' | 'high', value: string) => {
+    const parsed = Number(value);
+    setLatencyHighlightThresholds(prev => ({
+      ...prev,
+      [key]: Number.isFinite(parsed) ? Math.max(0, parsed) : 0,
+    }));
+  };
+
   // 导出中间文件：[[音色1, 开始, 结束, 时延], ...]
   const downloadIntermediateJson = () => {
       const exportData: any[] = [];
@@ -280,7 +340,7 @@ const AnalysisTable: React.FC<AnalysisTableProps> = ({ files, mode, onModeChange
                       setSelectedIds(new Set());
                       onModeChange(option.key);
                     }}
-                    className={`min-w-0 truncate whitespace-nowrap rounded-md px-3 py-1.5 text-xs font-bold ${
+                    className={`min-w-0 cursor-pointer truncate whitespace-nowrap rounded-md px-3 py-1.5 text-xs font-bold ${
                       mode === option.key
                         ? 'bg-[var(--psbc-green-soft)] text-[var(--psbc-green)]'
                         : 'text-slate-600 hover:bg-slate-100'
@@ -315,8 +375,67 @@ const AnalysisTable: React.FC<AnalysisTableProps> = ({ files, mode, onModeChange
                 {copiedFormat === 'markdown' ? '已复制' : isCompact ? 'Markdown' : '导出 Markdown'}
                 <Copy size={14} />
             </button>
+            <div className="relative shrink-0">
+              <button
+                ref={latencySettingsButtonRef}
+                type="button"
+                onClick={() => {
+                  if (!isLatencySettingsOpen) {
+                    updateLatencySettingsPosition();
+                  }
+                  setIsLatencySettingsOpen(prev => !prev);
+                }}
+                className={`tool-button h-9 w-9 px-0 ${isLatencySettingsOpen ? 'border-[var(--psbc-green)] bg-[var(--psbc-green-soft)] text-[var(--psbc-green)]' : ''}`}
+                title="设置时延高亮阈值"
+                aria-label="设置时延高亮阈值"
+                aria-expanded={isLatencySettingsOpen}
+              >
+                <SlidersHorizontal size={18} strokeWidth={2.2} />
+              </button>
+            </div>
         </div>
       </div>
+
+      {isLatencySettingsOpen && latencySettingsPosition && (
+        <div
+          ref={latencySettingsMenuRef}
+          className="fixed z-50 w-56 rounded-lg border border-slate-200 bg-white p-3 text-xs shadow-xl"
+          style={{ top: latencySettingsPosition.top, left: latencySettingsPosition.left }}
+        >
+          <div className="mb-3 font-bold text-slate-700">时延高亮</div>
+          <label className="mb-2 flex items-center justify-between gap-3 text-slate-600">
+            <span className="shrink-0">低于</span>
+            <div className="flex min-w-0 items-center gap-1">
+              <input
+                type="number"
+                min="0"
+                step="0.1"
+                value={latencyHighlightThresholds.low}
+                onChange={(event) => updateLatencyThreshold('low', event.currentTarget.value)}
+                className="h-8 w-20 rounded-md border border-slate-200 px-2 font-mono text-slate-800 outline-none focus:border-[var(--psbc-green)] focus:ring-2 focus:ring-[var(--psbc-green-line)]"
+              />
+              <span className="text-slate-400">s</span>
+            </div>
+          </label>
+          <label className="flex items-center justify-between gap-3 text-slate-600">
+            <span className="shrink-0">高于</span>
+            <div className="flex min-w-0 items-center gap-1">
+              <input
+                type="number"
+                min="0"
+                step="0.1"
+                value={latencyHighlightThresholds.high}
+                onChange={(event) => updateLatencyThreshold('high', event.currentTarget.value)}
+                className="h-8 w-20 rounded-md border border-slate-200 px-2 font-mono text-slate-800 outline-none focus:border-[var(--psbc-green)] focus:ring-2 focus:ring-[var(--psbc-green-line)]"
+              />
+              <span className="text-slate-400">s</span>
+            </div>
+          </label>
+          <div className="mt-3 border-t border-slate-100 pt-2 text-[11px] leading-4 text-slate-500">
+            最高和最低时延会始终优先高亮。
+          </div>
+        </div>
+      )}
       
       <div className="flex-1 overflow-auto" ref={tableRef}>
 	        <table className={`w-full table-fixed text-left text-[13px] text-slate-600 ${isVeryCompact ? 'min-w-[520px]' : isCompact ? 'min-w-[600px]' : 'min-w-[760px]'}`}>
@@ -333,12 +452,16 @@ const AnalysisTable: React.FC<AnalysisTableProps> = ({ files, mode, onModeChange
                 {displayedRows.map((row, idx) => {
                     const isBestLatency = latencyExtremes.best !== null && row.latency === latencyExtremes.best;
                     const isWorstLatency = latencyExtremes.worst !== null && row.latency === latencyExtremes.worst && latencyExtremes.worst !== latencyExtremes.best;
+                    const isLowThresholdLatency = row.latency < latencyHighlightThresholds.low;
+                    const isHighThresholdLatency = row.latency > latencyHighlightThresholds.high;
                     const latencyClass = isBestLatency
                         ? 'text-emerald-700 font-bold'
                         : isWorstLatency
-                            ? 'text-amber-900 font-bold'
-                            : row.latency > 3.0
-                                ? 'text-red-600 font-medium'
+                            ? 'text-red-700 font-extrabold'
+                            : isHighThresholdLatency
+                                ? 'text-red-600 font-bold'
+                                : isLowThresholdLatency
+                                    ? 'text-sky-700 font-bold'
                                 : 'text-gray-600';
                     const isSelected = selectedIds.has(row.segment1Id);
                     const isActive = row.segment1Id === activeSegmentId;

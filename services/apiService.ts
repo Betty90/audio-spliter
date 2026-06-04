@@ -81,9 +81,6 @@ export const analyzeAudio = async (
   formData.append('file', file);
   formData.append('numSpeakers', settings.numSpeakers.toString());
   formData.append('minDuration', settings.minSegmentDuration.toString());
-  formData.append('noiseThreshold', (settings.silenceThreshold || 0.005).toString());
-  formData.append('smoothingWidth', (settings.smoothingWidth || 5).toString());
-  formData.append('sampleRate', (settings.sampleRate || 16000).toString());
   formData.append('minSilenceDuration', (settings.minSilenceDuration !== undefined ? settings.minSilenceDuration : 0.1).toString());
 
   const backendUrl = await getApiBaseUrl(settings);

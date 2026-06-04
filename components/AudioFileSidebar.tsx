@@ -193,7 +193,7 @@ const AudioFileSidebar: React.FC<AudioFileSidebarProps> = ({
   }, [openMenuId]);
 
   return (
-    <aside className="flex h-full w-[224px] shrink-0 flex-col border-r border-slate-200 bg-white">
+    <aside className="flex h-full w-[248px] shrink-0 flex-col border-r border-slate-200 bg-white">
       <div className="flex h-[68px] items-center gap-3 border-b border-slate-200 px-4">
         <div className="relative flex h-9 w-9 items-center justify-center rounded-xl bg-[var(--psbc-green)] text-white shadow-sm">
           <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-[var(--psbc-gold)] ring-2 ring-white" />

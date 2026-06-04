@@ -10,9 +10,6 @@ export const DEFAULT_SETTINGS: AppSettings = {
     '音色1': '客服',
     '音色2': '客户',
   },
-  silenceThreshold: 0.005,
-  smoothingWidth: 5,
-  sampleRate: 16000,
   minSilenceDuration: 0.5,
 };
 

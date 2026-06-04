@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { AlertCircle, AudioWaveform, Clock3, PanelRightOpen, RefreshCw, TrendingDown, TrendingUp } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import {
   AppSettings,
   AudioFile,
@@ -25,8 +26,8 @@ import ConverterPage from './components/ConverterPage';
 import ConfirmDialog, { ConfirmConfig } from './components/ConfirmDialog';
 
 const DEFAULT_CONVERSION_SETTINGS: ConversionSettings = {
-  targetFormat: 'mp4',
-  videoCodec: 'h264',
+  targetFormat: 'm4a',
+  videoCodec: 'source',
   resolution: 'source',
   frameRate: 'source',
   videoBitrate: '1500',
@@ -43,8 +44,16 @@ const EMPTY_OUTPUT_POLICY: OutputPolicy = {
   afterConversion: 'none',
 };
 
-const DESKTOP_ANALYSIS_CONTENT_WIDTH = 720;
-const COMPACT_ANALYSIS_CONTENT_WIDTH = 480;
+function normalizeOutputPolicy(policy: OutputPolicy | null | undefined, fallbackDirectory: string): OutputPolicy {
+  return {
+    ...EMPTY_OUTPUT_POLICY,
+    ...policy,
+    directory: policy?.directory || fallbackDirectory,
+  };
+}
+
+const DESKTOP_ANALYSIS_CONTENT_WIDTH = 860;
+const COMPACT_ANALYSIS_CONTENT_WIDTH = 560;
 
 type AnalysisRowMode = string;
 type PendingWorkspaceFile = AudioFile & { requestId: string };
@@ -265,7 +274,7 @@ const App: React.FC = () => {
         if (!window.electron?.loadLibraryState) return;
         const persisted = await window.electron.loadLibraryState() as PersistedAppState | null;
         const downloads = await window.electron.getDownloadsDirectory?.();
-        const nextOutput = persisted?.outputPolicy || { ...EMPTY_OUTPUT_POLICY, directory: downloads || '' };
+        const nextOutput = normalizeOutputPolicy(persisted?.outputPolicy, downloads || '');
         setLibraryItems(persisted?.library || []);
         setCollections(persisted?.collections || []);
         setOutputPolicy(nextOutput);
@@ -710,11 +719,34 @@ const App: React.FC = () => {
     return { segments: modeLatencyRows.length, avg, max, min };
   }, [modeLatencyRows]);
 
-  const analysisStatCards = [
-    { label: '片段数', value: analysisStats.segments, hint: '当前模式', icon: AudioWaveform, tone: 'blue' },
+  const analysisStatRows = useMemo(() => {
+    const finiteRows = modeLatencyRows.filter(row => Number.isFinite(row.latency));
+    const positiveRows = finiteRows.filter(row => row.latency > 0);
+    const maxRow = finiteRows.reduce<LatencyRow | null>(
+      (current, row) => (!current || row.latency > current.latency ? row : current),
+      null,
+    );
+    const minRow = positiveRows.reduce<LatencyRow | null>(
+      (current, row) => (!current || row.latency < current.latency ? row : current),
+      null,
+    );
+    return { maxRow, minRow };
+  }, [modeLatencyRows]);
+
+  type AnalysisStatCard = {
+    label: string;
+    value: string | number;
+    hint: string;
+    icon: LucideIcon;
+    tone: string;
+    targetSegmentId?: string;
+  };
+
+  const analysisStatCards: AnalysisStatCard[] = [
+    { label: '间隔数', value: analysisStats.segments, hint: '片段间隔', icon: AudioWaveform, tone: 'blue' },
     { label: '平均时延', value: `${analysisStats.avg.toFixed(2)}s`, hint: '当前平均', icon: Clock3, tone: 'orange' },
-    { label: '最高时延', value: `${analysisStats.max.toFixed(2)}s`, hint: '最大值', icon: TrendingUp, tone: 'purple' },
-    { label: '最低时延', value: `${analysisStats.min.toFixed(2)}s`, hint: '最小值', icon: TrendingDown, tone: 'sky' },
+    { label: '最高时延', value: `${analysisStats.max.toFixed(2)}s`, hint: analysisStatRows.maxRow ? '点击定位' : '暂无数据', icon: TrendingUp, tone: 'red', targetSegmentId: analysisStatRows.maxRow?.segment1Id },
+    { label: '最低时延', value: `${analysisStats.min.toFixed(2)}s`, hint: analysisStatRows.minRow ? '点击定位' : '暂无数据', icon: TrendingDown, tone: 'sky', targetSegmentId: analysisStatRows.minRow?.segment1Id },
   ];
 
   const statToneClass: Record<string, string> = {
@@ -722,6 +754,7 @@ const App: React.FC = () => {
     blue: 'bg-blue-50 text-blue-600 ring-blue-100',
     orange: 'bg-orange-50 text-orange-600 ring-orange-100',
     purple: 'bg-violet-50 text-violet-600 ring-violet-100',
+    red: 'bg-red-50 text-red-700 ring-red-100',
     sky: 'bg-sky-50 text-sky-600 ring-sky-100',
   };
 
@@ -802,8 +835,16 @@ const App: React.FC = () => {
               >
                 <div className="flex shrink-0 items-stretch gap-2">
                   <div className="grid min-w-0 flex-1 grid-cols-4 gap-2">
-                    {analysisStatCards.map(({ label, value, hint, icon: Icon, tone }) => (
-                      <div key={label} className="group relative min-w-0 rounded-lg border border-slate-200 bg-white px-3 py-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-colors hover:border-slate-300">
+                    {analysisStatCards.map(({ label, value, hint, icon: Icon, tone, targetSegmentId }) => {
+                      const isClickable = Boolean(targetSegmentId);
+                      const isLinkedActive = targetSegmentId === activeSegmentId;
+                      const cardClassName = `group relative min-w-0 rounded-lg border bg-white px-3 py-3 text-left shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-colors ${
+                        isLinkedActive
+                          ? 'border-[var(--psbc-green)] ring-2 ring-[var(--psbc-green-line)]'
+                          : 'border-slate-200 hover:border-slate-300'
+                      } ${isClickable ? 'cursor-pointer focus:outline-none focus:ring-2 focus:ring-[var(--psbc-green-line)]' : ''}`;
+                      const content = (
+                        <>
                         <div className="min-w-0 pr-8">
                           <div className="whitespace-nowrap text-[11px] font-bold leading-none text-slate-500">{label}</div>
                           <div className="mt-2 whitespace-nowrap text-[20px] font-bold leading-none text-slate-950">{value}</div>
@@ -812,8 +853,24 @@ const App: React.FC = () => {
                         <div className={`absolute right-3 top-3 flex h-7 w-7 items-center justify-center rounded-lg ring-1 ${statToneClass[tone]}`}>
                           <Icon size={15} />
                         </div>
-                      </div>
-                    ))}
+                        </>
+                      );
+                      return isClickable ? (
+                        <button
+                          key={label}
+                          type="button"
+                          onClick={() => setActiveSegmentId(targetSegmentId || null)}
+                          className={cardClassName}
+                          title={`定位${label}对应的片段间隔`}
+                        >
+                          {content}
+                        </button>
+                      ) : (
+                        <div key={label} className={cardClassName}>
+                          {content}
+                        </div>
+                      );
+                    })}
                   </div>
 
                   {!isWaveformSidebarVisible && (

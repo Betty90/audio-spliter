@@ -13,6 +13,6 @@ contextBridge.exposeInMainWorld('electron', {
   loadLibraryState: () => ipcRenderer.invoke('load-library-state'),
   saveLibraryState: (state) => ipcRenderer.invoke('save-library-state', state),
   getStorageStats: (targetPath) => ipcRenderer.invoke('get-storage-stats'),
-  revealInFinder: (targetPath) => ipcRenderer.invoke('reveal-in-finder'),
+  revealInFinder: (targetPath) => ipcRenderer.invoke('reveal-in-finder', targetPath),
   getDownloadsDirectory: () => ipcRenderer.invoke('get-downloads-directory'),
 });
