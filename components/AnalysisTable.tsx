@@ -36,6 +36,9 @@ function filterRowsByMode(rows: LatencyRow[], mode: AnalysisRowMode): LatencyRow
   return matched.length ? matched : rows;
 }
 
+const STACKED_TOOLBAR_WIDTH = 820;
+const VERY_COMPACT_TABLE_WIDTH = 560;
+
 const AnalysisTable: React.FC<AnalysisTableProps> = ({ files, mode, onModeChange, activeSegmentId, onSegmentSelect, speakerLabels = {} }) => {
   const [copiedFormat, setCopiedFormat] = useState<'markdown' | 'tsv' | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -43,8 +46,8 @@ const AnalysisTable: React.FC<AnalysisTableProps> = ({ files, mode, onModeChange
   const [containerWidth, setContainerWidth] = useState(0);
   const shellRef = React.useRef<HTMLDivElement>(null);
   const tableRef = React.useRef<HTMLDivElement>(null);
-  const isCompact = containerWidth > 0 && containerWidth < 680;
-  const isVeryCompact = containerWidth > 0 && containerWidth < 540;
+  const isCompact = containerWidth > 0 && containerWidth < STACKED_TOOLBAR_WIDTH;
+  const isVeryCompact = containerWidth > 0 && containerWidth < VERY_COMPACT_TABLE_WIDTH;
 
   React.useEffect(() => {
     const shell = shellRef.current;
@@ -177,6 +180,13 @@ const AnalysisTable: React.FC<AnalysisTableProps> = ({ files, mode, onModeChange
     }, [{ key: 'all', label: '全部' }]);
   }, [dataRows, speakerLabels]);
 
+  const directionGridColumns = useMemo(() => {
+    if (directionOptions.length <= 1) return '1fr';
+    if (isVeryCompact) return 'repeat(2, minmax(0, 1fr))';
+    if (isCompact) return `repeat(${Math.min(directionOptions.length, 3)}, minmax(0, 1fr))`;
+    return `repeat(${directionOptions.length}, minmax(0, 1fr))`;
+  }, [directionOptions.length, isCompact, isVeryCompact]);
+
   const copyToClipboard = (format: 'markdown' | 'tsv') => {
     let text = '';
     
@@ -253,8 +263,11 @@ const AnalysisTable: React.FC<AnalysisTableProps> = ({ files, mode, onModeChange
   return (
     <div ref={shellRef} className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
       <div className={`flex gap-2 border-b border-slate-200 bg-white px-4 py-3 ${isCompact ? 'flex-col items-stretch' : 'items-center justify-between'}`}>
-        <div className="min-w-0">
-            <div className="flex max-w-full items-center overflow-x-auto rounded-lg border border-slate-200 bg-slate-50 p-1 shadow-sm">
+        <div className="min-w-0 flex-1">
+            <div
+              className="grid max-w-full gap-1 rounded-lg border border-slate-200 bg-slate-50 p-1 shadow-sm"
+              style={{ gridTemplateColumns: directionGridColumns }}
+            >
                 {directionOptions.map(option => (
                   <button
                     key={option.key}
@@ -262,7 +275,7 @@ const AnalysisTable: React.FC<AnalysisTableProps> = ({ files, mode, onModeChange
                       setSelectedIds(new Set());
                       onModeChange(option.key);
                     }}
-                    className={`shrink-0 whitespace-nowrap rounded-md px-3 py-1.5 text-xs font-bold ${
+                    className={`min-w-0 truncate whitespace-nowrap rounded-md px-3 py-1.5 text-xs font-bold ${
                       mode === option.key
                         ? 'bg-[var(--psbc-green-soft)] text-[var(--psbc-green)]'
                         : 'text-slate-600 hover:bg-slate-100'
