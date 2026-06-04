@@ -8,7 +8,7 @@ import ConfirmDialog, { ConfirmConfig } from './ConfirmDialog';
 import { extractAudioSegment } from '../utils/audioUtils';
 
 const DEFAULT_PANEL_WIDTH_RATIO = 0.5;
-const MAX_PANEL_WIDTH_RATIO = 0.8;
+const MAX_PANEL_WIDTH_RATIO = 0.6;
 const DESKTOP_ANALYSIS_CONTENT_WIDTH = 720;
 const MIN_ANALYSIS_CONTENT_WIDTH = 440;
 const MIN_PANEL_WIDTH = 320;
@@ -26,6 +26,15 @@ function getDefaultPanelWidth(workspaceWidth?: number): number {
     ? workspaceWidth - DESKTOP_ANALYSIS_CONTENT_WIDTH
     : Math.round(window.innerWidth * DEFAULT_PANEL_WIDTH_RATIO);
   return Math.min(maxWidth, Math.max(MIN_PANEL_WIDTH, availableWidth));
+}
+
+function getMaxPanelWidth(workspaceWidth: number): number {
+  const ratioWidth = Math.round(workspaceWidth * MAX_PANEL_WIDTH_RATIO);
+  const contentBoundedWidth = workspaceWidth - MIN_ANALYSIS_CONTENT_WIDTH;
+  return Math.max(
+    Math.min(MIN_PANEL_WIDTH, workspaceWidth),
+    Math.min(workspaceWidth, ratioWidth, contentBoundedWidth)
+  );
 }
 
 interface WaveformSidebarProps {
@@ -109,10 +118,7 @@ const WaveformSidebar: React.FC<WaveformSidebarProps> = ({
       const workspaceRight = workspaceRect?.right ?? window.innerWidth;
       const measuredWorkspaceWidth = workspaceRect?.width ?? (workspaceWidth || window.innerWidth);
       const newWidth = workspaceRight - e.clientX;
-      const maxWidth = Math.max(
-        Math.min(MIN_PANEL_WIDTH, measuredWorkspaceWidth),
-        Math.min(measuredWorkspaceWidth, measuredWorkspaceWidth - MIN_ANALYSIS_CONTENT_WIDTH)
-      );
+      const maxWidth = getMaxPanelWidth(measuredWorkspaceWidth);
       const minWidth = Math.min(MIN_PANEL_WIDTH, maxWidth);
       const clampedWidth = Math.min(maxWidth, Math.max(minWidth, newWidth));
 
@@ -161,10 +167,7 @@ const WaveformSidebar: React.FC<WaveformSidebarProps> = ({
     };
   }, []);
 
-  const maxInlineWidth =
-    workspaceWidth > 0
-      ? Math.max(Math.min(MIN_PANEL_WIDTH, workspaceWidth), workspaceWidth - MIN_ANALYSIS_CONTENT_WIDTH)
-      : width;
+  const maxInlineWidth = workspaceWidth > 0 ? getMaxPanelWidth(workspaceWidth) : width;
   const effectiveWidth = workspaceWidth > 0 ? Math.min(width, maxInlineWidth) : width;
   const panelStyle = { width: effectiveWidth, flexBasis: effectiveWidth, maxWidth: effectiveWidth };
   const panelPlacementClass = 'relative';
@@ -744,23 +747,23 @@ const WaveformSidebar: React.FC<WaveformSidebarProps> = ({
       />
 
       {/* Header - Fixed */}
-      <div className="z-20 flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3">
-        <div className="min-w-0">
+      <div className="z-20 flex min-w-0 shrink-0 items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3">
+        <div className="flex min-w-0 items-center gap-2">
+          {onHide && (
+              <button
+                  onClick={onHide}
+                  className="icon-button shrink-0"
+                  title="隐藏波形侧栏"
+                  aria-label="隐藏波形侧栏"
+              >
+                  <PanelRightClose size={16} />
+              </button>
+          )}
           <h3 className="max-w-[210px] truncate text-base font-bold leading-tight text-slate-950" title={file.name}>
             {file.name}
           </h3>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
-            {onHide && (
-                <button
-                    onClick={onHide}
-                    className="icon-button"
-                    title="隐藏波形侧栏"
-                    aria-label="隐藏波形侧栏"
-                >
-                    <PanelRightClose size={16} />
-                </button>
-            )}
             {onOpenSettings && (
                 <button 
                     onClick={() => onOpenSettings(file.id)}
@@ -796,9 +799,9 @@ const WaveformSidebar: React.FC<WaveformSidebarProps> = ({
       </div>
 
       {/* Player Section - Fixed/Sticky */}
-      <div className="z-10 shrink-0 space-y-2 border-b border-slate-200 bg-white p-3">
+      <div className="z-10 min-w-0 shrink-0 space-y-2 overflow-hidden border-b border-slate-200 bg-white p-3">
          {/* Combined Controls Row */}
-         <div className="flex items-center justify-between gap-2">
+         <div className="flex min-w-0 items-center justify-between gap-2">
             
             {/* Playback Controls */}
             <div className="flex shrink-0 items-center gap-0.5">
@@ -852,12 +855,12 @@ const WaveformSidebar: React.FC<WaveformSidebarProps> = ({
         </div>
 
         {/* Waveform Container */}
-        <div className="group relative rounded-lg border border-slate-200 bg-white p-2 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
-            <div className="mb-2 flex items-center justify-between text-[11px] font-medium text-slate-500">
+        <div className="group relative min-w-0 max-w-full overflow-hidden rounded-lg border border-slate-200 bg-white p-2 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+            <div className="mb-2 flex min-w-0 items-center justify-between gap-2 text-[11px] font-medium text-slate-500">
                 <span className="font-mono">{currentTime.toFixed(1)}s / {duration.toFixed(1)}s</span>
-                <span>{Math.round(zoom)} px/s · {waveformHeight}px</span>
+                <span className="truncate">{Math.round(zoom)} px/s · {waveformHeight}px</span>
             </div>
-            <div ref={containerRef} className="w-full overflow-x-auto" />
+            <div ref={containerRef} className="max-w-full overflow-x-auto" />
             
             {/* Channel Labels - L在上方声道顶部，R在下方声道顶部 */}
             {isReady && channelCount > 1 && (
@@ -887,7 +890,7 @@ const WaveformSidebar: React.FC<WaveformSidebarProps> = ({
       </div>
 
       {/* Segment List (Scrollable) */}
-      <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto bg-slate-50/60 p-2.5">
+      <div className="min-h-0 min-w-0 flex-1 space-y-1.5 overflow-y-auto bg-slate-50/60 p-2.5">
             <h4 className="flex items-center justify-between border-b border-slate-100 px-1 pb-1.5 text-xs font-bold text-slate-700">
                 片段列表
                 <span className="text-xs font-normal normal-case text-slate-400">
