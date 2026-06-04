@@ -40,7 +40,26 @@ const AnalysisTable: React.FC<AnalysisTableProps> = ({ files, mode, onModeChange
   const [copiedFormat, setCopiedFormat] = useState<'markdown' | 'tsv' | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [lastInteractedId, setLastInteractedId] = useState<string | null>(null);
+  const [containerWidth, setContainerWidth] = useState(0);
+  const shellRef = React.useRef<HTMLDivElement>(null);
   const tableRef = React.useRef<HTMLDivElement>(null);
+  const isCompact = containerWidth > 0 && containerWidth < 680;
+  const isVeryCompact = containerWidth > 0 && containerWidth < 540;
+
+  React.useEffect(() => {
+    const shell = shellRef.current;
+    if (!shell) return;
+
+    const updateWidth = () => {
+      setContainerWidth(shell.getBoundingClientRect().width);
+    };
+
+    updateWidth();
+    const observer = new ResizeObserver(updateWidth);
+    observer.observe(shell);
+
+    return () => observer.disconnect();
+  }, []);
 
   React.useEffect(() => {
     if (activeSegmentId) {
@@ -232,10 +251,10 @@ const AnalysisTable: React.FC<AnalysisTableProps> = ({ files, mode, onModeChange
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
-      <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3">
-        <div className="flex min-w-0 items-center gap-3">
-            <div className="flex items-center rounded-lg border border-slate-200 bg-slate-50 p-1 shadow-sm">
+    <div ref={shellRef} className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+      <div className={`flex gap-2 border-b border-slate-200 bg-white px-4 py-3 ${isCompact ? 'flex-col items-stretch' : 'items-center justify-between'}`}>
+        <div className="min-w-0">
+            <div className="flex max-w-full items-center overflow-x-auto rounded-lg border border-slate-200 bg-slate-50 p-1 shadow-sm">
                 {directionOptions.map(option => (
                   <button
                     key={option.key}
@@ -243,53 +262,53 @@ const AnalysisTable: React.FC<AnalysisTableProps> = ({ files, mode, onModeChange
                       setSelectedIds(new Set());
                       onModeChange(option.key);
                     }}
-                    className={`rounded-md px-3 py-1.5 text-xs font-bold ${
+                    className={`shrink-0 whitespace-nowrap rounded-md px-3 py-1.5 text-xs font-bold ${
                       mode === option.key
                         ? 'bg-[var(--psbc-green-soft)] text-[var(--psbc-green)]'
                         : 'text-slate-600 hover:bg-slate-100'
                     }`}
                     title={option.key === 'all' ? '显示全部响应行' : `只显示 ${option.label}`}
                   >
-                    {option.label}
+                    {isVeryCompact && option.key !== 'all' ? option.label.replace(/\s/g, '') : option.label}
                   </button>
                 ))}
             </div>
         </div>
-        <div className="flex shrink-0 items-center gap-2 overflow-x-auto">
+        <div className={`flex min-w-0 items-center gap-2 overflow-x-auto ${isCompact ? 'justify-end' : 'shrink-0'}`}>
             <button 
                 onClick={downloadIntermediateJson}
-                className="tool-button h-9 px-3"
+                className="tool-button h-9 shrink-0 px-3"
                 title="下载中间结果 JSON"
             >
                 <FileJson size={14} />
-                导出 JSON
+                {isCompact ? 'JSON' : '导出 JSON'}
             </button>
             <button 
                 onClick={() => copyToClipboard('tsv')}
-                className="tool-button brand-accent h-9 px-3"
+                className="tool-button brand-accent h-9 shrink-0 px-3"
             >
-                {copiedFormat === 'tsv' ? '已复制' : '导出 Excel'}
+                {copiedFormat === 'tsv' ? '已复制' : isCompact ? 'Excel' : '导出 Excel'}
                 <FileDown size={14} />
             </button>
             <button 
                 onClick={() => copyToClipboard('markdown')}
-                className="tool-button h-9 border-[var(--psbc-green-line)] px-3 text-[var(--psbc-green)] hover:border-[var(--psbc-green)] hover:bg-[var(--psbc-green-soft)]"
+                className="tool-button h-9 shrink-0 border-[var(--psbc-green-line)] px-3 text-[var(--psbc-green)] hover:border-[var(--psbc-green)] hover:bg-[var(--psbc-green-soft)]"
             >
-                {copiedFormat === 'markdown' ? '已复制' : '导出 Markdown'}
+                {copiedFormat === 'markdown' ? '已复制' : isCompact ? 'Markdown' : '导出 Markdown'}
                 <Copy size={14} />
             </button>
         </div>
       </div>
       
       <div className="flex-1 overflow-auto" ref={tableRef}>
-	        <table className="w-full min-w-[760px] table-fixed text-left text-[13px] text-slate-600">
+	        <table className={`w-full table-fixed text-left text-[13px] text-slate-600 ${isVeryCompact ? 'min-w-[520px]' : isCompact ? 'min-w-[600px]' : 'min-w-[760px]'}`}>
 	            <thead className="sticky top-0 z-10 border-b border-slate-200 bg-white text-xs font-bold text-slate-600 shadow-[0_1px_0_rgba(15,23,42,0.04)]">
 	                <tr>
-	                    <th className="w-[180px] px-2.5 py-2.5">片段间隔</th>
-	                    <th className="w-[145px] px-2.5 py-2.5">片段1结束</th>
-	                    <th className="w-[145px] px-2.5 py-2.5">片段2开始</th>
-	                    <th className="w-[95px] px-2.5 py-2.5">响应时延</th>
-	                    <th className="w-[80px] px-2.5 py-2.5">备注</th>
+	                    <th className={`${isVeryCompact ? 'w-[142px]' : isCompact ? 'w-[160px]' : 'w-[180px]'} px-2.5 py-2.5`}>片段间隔</th>
+	                    <th className={`${isCompact ? 'w-[105px]' : 'w-[145px]'} px-2.5 py-2.5`}>片段1结束</th>
+	                    <th className={`${isCompact ? 'w-[105px]' : 'w-[145px]'} px-2.5 py-2.5`}>片段2开始</th>
+	                    <th className={`${isCompact ? 'w-[84px]' : 'w-[95px]'} px-2.5 py-2.5`}>响应时延</th>
+	                    <th className={`${isCompact ? 'w-[64px]' : 'w-[80px]'} px-2.5 py-2.5`}>备注</th>
                 </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -339,10 +358,10 @@ const AnalysisTable: React.FC<AnalysisTableProps> = ({ files, mode, onModeChange
 	                                </div>
 	                            </td>
 	                            <td className="px-2.5 py-2.5 font-mono text-slate-700">
-                                {formatTime(row.segment1End)} <span className="text-xs text-slate-400">({row.segment1End.toFixed(2)})</span>
+                                {formatTime(row.segment1End)} {!isCompact && <span className="text-xs text-slate-400">({row.segment1End.toFixed(2)})</span>}
                             </td>
                             <td className="px-2.5 py-2.5 font-mono text-slate-700">
-                                {formatTime(row.segment2Start)} <span className="text-xs text-slate-400">({row.segment2Start.toFixed(2)})</span>
+                                {formatTime(row.segment2Start)} {!isCompact && <span className="text-xs text-slate-400">({row.segment2Start.toFixed(2)})</span>}
                             </td>
                             <td className={`px-2.5 py-2.5 font-semibold ${latencyClass}`}>
                                 {row.latency.toFixed(2)}s
