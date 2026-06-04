@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { AlertCircle, AudioWaveform, Clock3, RefreshCw, TrendingDown, TrendingUp } from 'lucide-react';
+import { AlertCircle, AudioWaveform, Clock3, PanelRightClose, PanelRightOpen, RefreshCw, TrendingDown, TrendingUp } from 'lucide-react';
 import {
   AppSettings,
   AudioFile,
@@ -18,7 +18,7 @@ import { analyzeAudio, checkHealth as checkBackendHealth } from './services/apiS
 import { DEFAULT_SETTINGS } from './constants';
 import SettingsModal from './components/SettingsModal';
 import LabModal from './components/LabModal';
-import WaveformSidebar, { type WaveformSidebarLayoutMode } from './components/WaveformSidebar';
+import WaveformSidebar from './components/WaveformSidebar';
 import AudioFileSidebar from './components/AudioFileSidebar';
 import AnalysisTable from './components/AnalysisTable';
 import ConverterPage from './components/ConverterPage';
@@ -43,8 +43,7 @@ const EMPTY_OUTPUT_POLICY: OutputPolicy = {
   afterConversion: 'none',
 };
 
-const ANALYSIS_SIDEBAR_DRAWER_BACKDROP_CLASS =
-  'absolute inset-0 z-10 bg-slate-950/10 backdrop-blur-[1px]';
+const MIN_ANALYSIS_CONTENT_WIDTH = 720;
 
 type AnalysisRowMode = string;
 type PendingWorkspaceFile = AudioFile & { requestId: string };
@@ -204,7 +203,7 @@ const App: React.FC = () => {
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [editingSettingsFileId, setEditingSettingsFileId] = useState<string | null>(null);
   const [analysisRowMode, setAnalysisRowMode] = useState<AnalysisRowMode>('all');
-  const [analysisSidebarMode, setAnalysisSidebarMode] = useState<WaveformSidebarLayoutMode>('inline');
+  const [isWaveformSidebarVisible, setIsWaveformSidebarVisible] = useState(true);
   const [isDragging, setIsDragging] = useState(false);
   const [backendHealthy, setBackendHealthy] = useState<boolean>(true);
   const [hasLoadedPersistedState, setHasLoadedPersistedState] = useState(false);
@@ -774,7 +773,7 @@ const App: React.FC = () => {
           </div>
         )}
 
-        <div className="relative flex min-h-0 flex-1 overflow-hidden">
+        <div className="relative flex min-h-0 flex-1 overflow-x-auto overflow-y-hidden">
           {activeTab === 'converter' ? (
             <ConverterPage
               onBack={() => setActiveTab('analyzer')}
@@ -792,11 +791,22 @@ const App: React.FC = () => {
                 className={`relative flex min-w-0 flex-1 flex-col gap-4 overflow-hidden bg-slate-50/70 p-5 transition-colors ${
                   isDragging ? 'bg-[var(--psbc-green-soft)]/60 ring-4 ring-[var(--psbc-green-line)]' : ''
                 }`}
+                style={{ minWidth: MIN_ANALYSIS_CONTENT_WIDTH }}
                 onDragOver={onDragOver}
                 onDragLeave={onDragLeave}
                 onDrop={onDrop}
               >
-                <div className="grid shrink-0 grid-cols-4 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsWaveformSidebarVisible(prev => !prev)}
+                  className="absolute right-3 top-3 z-30 flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 shadow-sm transition-colors hover:border-slate-300 hover:text-slate-900"
+                  title={isWaveformSidebarVisible ? '隐藏波形侧栏' : '显示波形侧栏'}
+                  aria-label={isWaveformSidebarVisible ? '隐藏波形侧栏' : '显示波形侧栏'}
+                >
+                  {isWaveformSidebarVisible ? <PanelRightClose size={16} /> : <PanelRightOpen size={16} />}
+                </button>
+
+                <div className="grid shrink-0 grid-cols-4 gap-2 pr-10">
                   {analysisStatCards.map(({ label, value, hint, icon: Icon, tone }) => (
                     <div key={label} className="group relative min-w-0 rounded-lg border border-slate-200 bg-white px-3 py-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-colors hover:border-slate-300">
                       <div className="min-w-0 pr-8">
@@ -844,26 +854,18 @@ const App: React.FC = () => {
                 )}
               </main>
 
-              {analysisSidebarMode === 'drawer' && activeFile && (
-                <button
-                  type="button"
-                  aria-label="关闭波形抽屉"
-                  className={ANALYSIS_SIDEBAR_DRAWER_BACKDROP_CLASS}
-                  onClick={() => setSelectedAnalyzerFileId(null)}
+              {isWaveformSidebarVisible && (
+                <WaveformSidebar
+                  file={activeFile}
+                  onUpdateSegments={handleSegmentUpdate}
+                  onClose={() => setSelectedAnalyzerFileId(null)}
+                  settings={activeFile?.settings || settings}
+                  activeSegmentId={activeSegmentId}
+                  onSegmentSelect={setActiveSegmentId}
+                  onReanalyze={handleReanalyzeRequest}
+                  onOpenSettings={setEditingSettingsFileId}
                 />
               )}
-
-              <WaveformSidebar
-                file={activeFile}
-                onUpdateSegments={handleSegmentUpdate}
-                onClose={() => setSelectedAnalyzerFileId(null)}
-                settings={activeFile?.settings || settings}
-                activeSegmentId={activeSegmentId}
-                onSegmentSelect={setActiveSegmentId}
-                onReanalyze={handleReanalyzeRequest}
-                onOpenSettings={setEditingSettingsFileId}
-                onLayoutModeChange={setAnalysisSidebarMode}
-              />
             </>
           )}
         </div>
