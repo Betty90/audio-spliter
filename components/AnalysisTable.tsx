@@ -38,6 +38,7 @@ function filterRowsByMode(rows: LatencyRow[], mode: AnalysisRowMode): LatencyRow
 
 const STACKED_TOOLBAR_WIDTH = 820;
 const VERY_COMPACT_TABLE_WIDTH = 560;
+const MIN_DIRECTION_BUTTON_WIDTH = 86;
 
 const AnalysisTable: React.FC<AnalysisTableProps> = ({ files, mode, onModeChange, activeSegmentId, onSegmentSelect, speakerLabels = {} }) => {
   const [copiedFormat, setCopiedFormat] = useState<'markdown' | 'tsv' | null>(null);
@@ -182,10 +183,14 @@ const AnalysisTable: React.FC<AnalysisTableProps> = ({ files, mode, onModeChange
 
   const directionGridColumns = useMemo(() => {
     if (directionOptions.length <= 1) return '1fr';
-    if (isVeryCompact) return 'repeat(2, minmax(0, 1fr))';
-    if (isCompact) return `repeat(${Math.min(directionOptions.length, 3)}, minmax(0, 1fr))`;
-    return `repeat(${directionOptions.length}, minmax(0, 1fr))`;
-  }, [directionOptions.length, isCompact, isVeryCompact]);
+    if (containerWidth === 0) return `repeat(${directionOptions.length}, minmax(0, 1fr))`;
+
+    const availableWidth = Math.max(0, containerWidth - 40);
+    const maxColumns = Math.max(2, Math.floor(availableWidth / MIN_DIRECTION_BUTTON_WIDTH));
+    const columns = Math.min(directionOptions.length, maxColumns);
+
+    return `repeat(${columns}, minmax(0, 1fr))`;
+  }, [containerWidth, directionOptions.length]);
 
   const copyToClipboard = (format: 'markdown' | 'tsv') => {
     let text = '';
