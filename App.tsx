@@ -43,7 +43,8 @@ const EMPTY_OUTPUT_POLICY: OutputPolicy = {
   afterConversion: 'none',
 };
 
-const MIN_ANALYSIS_CONTENT_WIDTH = 720;
+const DESKTOP_ANALYSIS_CONTENT_WIDTH = 720;
+const COMPACT_ANALYSIS_CONTENT_WIDTH = 440;
 
 type AnalysisRowMode = string;
 type PendingWorkspaceFile = AudioFile & { requestId: string };
@@ -773,7 +774,7 @@ const App: React.FC = () => {
           </div>
         )}
 
-        <div className="relative flex min-h-0 flex-1 overflow-x-auto overflow-y-hidden">
+        <div className="relative flex min-h-0 flex-1 overflow-hidden">
           {activeTab === 'converter' ? (
             <ConverterPage
               onBack={() => setActiveTab('analyzer')}
@@ -791,22 +792,12 @@ const App: React.FC = () => {
                 className={`relative flex min-w-0 flex-1 flex-col gap-4 overflow-hidden bg-slate-50/70 p-5 transition-colors ${
                   isDragging ? 'bg-[var(--psbc-green-soft)]/60 ring-4 ring-[var(--psbc-green-line)]' : ''
                 }`}
-                style={{ minWidth: MIN_ANALYSIS_CONTENT_WIDTH }}
+                style={{ minWidth: `min(${DESKTOP_ANALYSIS_CONTENT_WIDTH}px, max(${COMPACT_ANALYSIS_CONTENT_WIDTH}px, calc(100vw - 584px)))` }}
                 onDragOver={onDragOver}
                 onDragLeave={onDragLeave}
                 onDrop={onDrop}
               >
-                <button
-                  type="button"
-                  onClick={() => setIsWaveformSidebarVisible(prev => !prev)}
-                  className="absolute right-3 top-3 z-30 flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 shadow-sm transition-colors hover:border-slate-300 hover:text-slate-900"
-                  title={isWaveformSidebarVisible ? '隐藏波形侧栏' : '显示波形侧栏'}
-                  aria-label={isWaveformSidebarVisible ? '隐藏波形侧栏' : '显示波形侧栏'}
-                >
-                  {isWaveformSidebarVisible ? <PanelRightClose size={16} /> : <PanelRightOpen size={16} />}
-                </button>
-
-                <div className="grid shrink-0 grid-cols-4 gap-2 pr-10">
+                <div className="grid shrink-0 grid-cols-4 gap-2">
                   {analysisStatCards.map(({ label, value, hint, icon: Icon, tone }) => (
                     <div key={label} className="group relative min-w-0 rounded-lg border border-slate-200 bg-white px-3 py-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-colors hover:border-slate-300">
                       <div className="min-w-0 pr-8">
@@ -853,6 +844,18 @@ const App: React.FC = () => {
                   </div>
                 )}
               </main>
+
+              <aside className="z-20 flex h-full w-10 shrink-0 flex-col items-center border-l border-slate-200 bg-white/85 px-1.5 py-3 shadow-[-2px_0_10px_rgba(15,23,42,0.04)] backdrop-blur">
+                <button
+                  type="button"
+                  onClick={() => setIsWaveformSidebarVisible(prev => !prev)}
+                  className="flex h-7 w-7 items-center justify-center rounded-md text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-950"
+                  title={isWaveformSidebarVisible ? '隐藏波形侧栏' : '显示波形侧栏'}
+                  aria-label={isWaveformSidebarVisible ? '隐藏波形侧栏' : '显示波形侧栏'}
+                >
+                  {isWaveformSidebarVisible ? <PanelRightClose size={15} /> : <PanelRightOpen size={15} />}
+                </button>
+              </aside>
 
               {isWaveformSidebarVisible && (
                 <WaveformSidebar

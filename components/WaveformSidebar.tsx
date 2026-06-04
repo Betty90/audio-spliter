@@ -9,9 +9,11 @@ import { extractAudioSegment } from '../utils/audioUtils';
 
 const DEFAULT_PANEL_WIDTH_RATIO = 0.5;
 const MAX_PANEL_WIDTH_RATIO = 0.8;
-const MIN_ANALYSIS_CONTENT_WIDTH = 720;
-const MIN_PANEL_WIDTH = 360;
-const PANEL_WIDTH_FALLBACK = 720;
+const DESKTOP_ANALYSIS_CONTENT_WIDTH = 720;
+const MIN_ANALYSIS_CONTENT_WIDTH = 440;
+const MIN_PANEL_WIDTH = 320;
+const PANEL_WIDTH_FALLBACK = 560;
+const SIDEBAR_RAIL_WIDTH = 40;
 const SINGLE_CHANNEL_WAVEFORM_HEIGHT = 240;
 const SPLIT_CHANNEL_WAVEFORM_HEIGHT = 160;
 const MIN_WAVEFORM_HEIGHT_SCALE = 0.7;
@@ -21,7 +23,9 @@ function getDefaultPanelWidth(workspaceWidth?: number): number {
   if (typeof window === 'undefined') return PANEL_WIDTH_FALLBACK;
   const viewportMaxWidth = Math.round(window.innerWidth * MAX_PANEL_WIDTH_RATIO);
   const maxWidth = workspaceWidth ? Math.min(viewportMaxWidth, workspaceWidth) : viewportMaxWidth;
-  const availableWidth = workspaceWidth ? workspaceWidth - MIN_ANALYSIS_CONTENT_WIDTH : Math.round(window.innerWidth * DEFAULT_PANEL_WIDTH_RATIO);
+  const availableWidth = workspaceWidth
+    ? workspaceWidth - DESKTOP_ANALYSIS_CONTENT_WIDTH - SIDEBAR_RAIL_WIDTH
+    : Math.round(window.innerWidth * DEFAULT_PANEL_WIDTH_RATIO);
   return Math.min(maxWidth, Math.max(MIN_PANEL_WIDTH, availableWidth));
 }
 
@@ -106,7 +110,7 @@ const WaveformSidebar: React.FC<WaveformSidebarProps> = ({
       const newWidth = workspaceRight - e.clientX;
       const maxWidth = Math.max(
         Math.min(MIN_PANEL_WIDTH, measuredWorkspaceWidth),
-        Math.min(measuredWorkspaceWidth, measuredWorkspaceWidth - MIN_ANALYSIS_CONTENT_WIDTH)
+        Math.min(measuredWorkspaceWidth, measuredWorkspaceWidth - MIN_ANALYSIS_CONTENT_WIDTH - SIDEBAR_RAIL_WIDTH)
       );
       const minWidth = Math.min(MIN_PANEL_WIDTH, maxWidth);
       const clampedWidth = Math.min(maxWidth, Math.max(minWidth, newWidth));
@@ -158,7 +162,7 @@ const WaveformSidebar: React.FC<WaveformSidebarProps> = ({
 
   const maxInlineWidth =
     workspaceWidth > 0
-      ? Math.max(Math.min(MIN_PANEL_WIDTH, workspaceWidth), workspaceWidth - MIN_ANALYSIS_CONTENT_WIDTH)
+      ? Math.max(Math.min(MIN_PANEL_WIDTH, workspaceWidth), workspaceWidth - MIN_ANALYSIS_CONTENT_WIDTH - SIDEBAR_RAIL_WIDTH)
       : width;
   const effectiveWidth = workspaceWidth > 0 ? Math.min(width, maxInlineWidth) : width;
   const panelPlacementClass = 'relative';
