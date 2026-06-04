@@ -44,7 +44,7 @@ const EMPTY_OUTPUT_POLICY: OutputPolicy = {
 };
 
 const DESKTOP_ANALYSIS_CONTENT_WIDTH = 720;
-const COMPACT_ANALYSIS_CONTENT_WIDTH = 440;
+const COMPACT_ANALYSIS_CONTENT_WIDTH = 480;
 
 type AnalysisRowMode = string;
 type PendingWorkspaceFile = AudioFile & { requestId: string };
@@ -792,7 +792,10 @@ const App: React.FC = () => {
                 className={`relative flex min-w-0 flex-1 flex-col gap-4 overflow-hidden bg-slate-50/70 p-5 transition-colors ${
                   isDragging ? 'bg-[var(--psbc-green-soft)]/60 ring-4 ring-[var(--psbc-green-line)]' : ''
                 }`}
-                style={{ minWidth: `min(${DESKTOP_ANALYSIS_CONTENT_WIDTH}px, max(${COMPACT_ANALYSIS_CONTENT_WIDTH}px, calc(100vw - 544px)))` }}
+                style={{
+                  flexBasis: DESKTOP_ANALYSIS_CONTENT_WIDTH,
+                  minWidth: COMPACT_ANALYSIS_CONTENT_WIDTH,
+                }}
                 onDragOver={onDragOver}
                 onDragLeave={onDragLeave}
                 onDrop={onDrop}

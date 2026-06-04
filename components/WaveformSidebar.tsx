@@ -10,7 +10,7 @@ import { extractAudioSegment } from '../utils/audioUtils';
 const DEFAULT_PANEL_WIDTH_RATIO = 0.5;
 const MAX_PANEL_WIDTH_RATIO = 0.6;
 const DESKTOP_ANALYSIS_CONTENT_WIDTH = 720;
-const MIN_ANALYSIS_CONTENT_WIDTH = 440;
+const MIN_ANALYSIS_CONTENT_WIDTH = 480;
 const MIN_PANEL_WIDTH = 320;
 const PANEL_WIDTH_FALLBACK = 560;
 const SINGLE_CHANNEL_WAVEFORM_HEIGHT = 240;
@@ -116,7 +116,9 @@ const WaveformSidebar: React.FC<WaveformSidebarProps> = ({
       const workspace = panelRef.current?.parentElement;
       const workspaceRect = workspace?.getBoundingClientRect();
       const workspaceRight = workspaceRect?.right ?? window.innerWidth;
-      const measuredWorkspaceWidth = workspaceRect?.width ?? (workspaceWidth || window.innerWidth);
+      const measuredWorkspaceWidth = workspaceRect
+        ? Math.min(workspaceRect.width, window.innerWidth - workspaceRect.left)
+        : (workspaceWidth || window.innerWidth);
       const newWidth = workspaceRight - e.clientX;
       const maxWidth = getMaxPanelWidth(measuredWorkspaceWidth);
       const minWidth = Math.min(MIN_PANEL_WIDTH, maxWidth);
@@ -149,10 +151,12 @@ const WaveformSidebar: React.FC<WaveformSidebarProps> = ({
     if (!workspace) return;
 
     const updateWorkspaceWidth = () => {
-      setWorkspaceWidth(workspace.clientWidth);
+      const workspaceRect = workspace.getBoundingClientRect();
+      const measuredWorkspaceWidth = Math.min(workspaceRect.width, window.innerWidth - workspaceRect.left);
+      setWorkspaceWidth(measuredWorkspaceWidth);
       if (!hasMeasuredWorkspaceRef.current && !userResizedRef.current) {
         hasMeasuredWorkspaceRef.current = true;
-        setWidth(getDefaultPanelWidth(workspace.clientWidth));
+        setWidth(getDefaultPanelWidth(measuredWorkspaceWidth));
       }
     };
 
