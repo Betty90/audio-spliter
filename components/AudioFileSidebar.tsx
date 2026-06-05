@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { AudioFile, FileStatus, LibraryCategory, LibraryCollection, LibraryItem, WorkspaceTab } from '../types';
 import { ACCEPTED_MIME_TYPES } from '../constants';
+import appIcon from '../assets/icons/icon.png';
 
 interface AudioFileSidebarProps {
   files: AudioFile[];
@@ -195,9 +196,8 @@ const AudioFileSidebar: React.FC<AudioFileSidebarProps> = ({
   return (
     <aside className="flex h-full w-[248px] shrink-0 flex-col border-r border-slate-200 bg-white">
       <div className="flex h-[68px] items-center gap-3 border-b border-slate-200 px-4">
-        <div className="relative flex h-9 w-9 items-center justify-center rounded-xl bg-[var(--psbc-green)] text-white shadow-sm">
-          <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-[var(--psbc-gold)] ring-2 ring-white" />
-          <FileAudio size={20} />
+        <div className="relative flex h-9 w-9 items-center justify-center overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-slate-200">
+          <img src={appIcon} alt="" className="h-full w-full object-cover" draggable={false} />
         </div>
         <div className="min-w-0">
           <div className="truncate text-[15px] font-bold leading-tight text-slate-950">UAudioLab</div>
