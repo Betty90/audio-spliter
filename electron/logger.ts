@@ -11,14 +11,14 @@ function getLogDirectory(): string {
   const platform = process.platform;
   
   if (platform === 'darwin') {
-    // macOS: ~/Library/Logs/AudioSlicer/
-    return path.join(os.homedir(), 'Library', 'Logs', 'AudioSlicer');
+    // macOS: ~/Library/Logs/UAudioLab/
+    return path.join(os.homedir(), 'Library', 'Logs', 'UAudioLab');
   } else if (platform === 'win32') {
-    // Windows: %APPDATA%/AudioSlicer/logs/
-    return path.join(app.getPath('appData'), 'AudioSlicer', 'logs');
+    // Windows: %APPDATA%/UAudioLab/logs/
+    return path.join(app.getPath('appData'), 'UAudioLab', 'logs');
   } else {
-    // Linux: ~/.config/AudioSlicer/logs/
-    return path.join(os.homedir(), '.config', 'AudioSlicer', 'logs');
+    // Linux: ~/.config/UAudioLab/logs/
+    return path.join(os.homedir(), '.config', 'UAudioLab', 'logs');
   }
 }
 

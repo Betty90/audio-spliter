@@ -1,6 +1,6 @@
 # -*- mode: python ; coding: utf-8 -*-
 """
-PyInstaller spec file for AudioSlicer AI Flask backend
+PyInstaller spec file for UAudioLab Flask backend
 Generated: 2026-03-23
 
 This spec packages the Python Flask backend into a standalone executable
@@ -226,9 +226,9 @@ coll = COLLECT(
 # if IS_MACOS:
 #     app = BUNDLE(
 #         exe,
-#         name='AudioSlicer AI Server.app',
+#         name='UAudioLab Server.app',
 #         icon=None,
-#         bundle_identifier='com.audioslicer.server',
+#         bundle_identifier='com.uaudiolab.server',
 #         info_plist={
 #             'CFBundleShortVersionString': '1.0.0',
 #             'CFBundleVersion': '1.0.0',

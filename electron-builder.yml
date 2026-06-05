@@ -1,6 +1,6 @@
-appId: com.audioslicer.app
-productName: AudioSlicer AI
-copyright: Copyright © 2025 AudioSlicer AI
+appId: com.uaudiolab.app
+productName: UAudioLab
+copyright: Copyright © 2025 UAudioLab
 directories:
   output: release
   buildResources: assets
@@ -57,9 +57,8 @@ nsis:
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
   createStartMenuShortcut: true
-  shortcutName: AudioSlicer AI
+  shortcutName: UAudioLab
   include: assets/nsis/installer.nsh
-  license: LICENSE
   artifactName: "${productName}-${version}-Setup.${ext}"
 # Linux Configuration
 linux:
@@ -72,10 +71,10 @@ linux:
     - target: deb
       arch:
         - x64
-  maintainer: AudioSlicer AI Team
+  maintainer: UAudioLab Team
   synopsis: Intelligent Audio Slicing and Speaker Diarization Tool
   description: |
-    AudioSlicer AI is an intelligent audio slicing and speaker diarization tool
+    UAudioLab is an intelligent audio slicing and speaker diarization tool
     based on machine learning algorithms. It automatically identifies different
     speakers in audio files and supports visual editing and segment export.
   mimeTypes:
@@ -87,7 +86,7 @@ linux:
     - audio/ogg
     - audio/aac
   desktop:
-    Name: AudioSlicer AI
+    Name: UAudioLab
     Comment: Intelligent Audio Slicing Tool
     Categories: AudioVideo;Audio;
     MimeType: audio/mpeg;audio/wav;audio/x-wav;audio/mp4;audio/x-m4a;

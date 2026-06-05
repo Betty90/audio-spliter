@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Build script for AudioSlicer AI
+ * Build script for UAudioLab
  * Orchestrates Python, frontend, Electron, and packaging builds
  */
 
@@ -255,7 +255,7 @@ function copyResources(requirePythonBackend = false) {
 
 function showHelp() {
   console.log(`
-AudioSlicer AI Build Script
+UAudioLab Build Script
 
 Usage: node scripts/build.js [options]
 
@@ -294,7 +294,7 @@ async function main() {
 
   log(`
 ${'='.repeat(60)}
-  AudioSlicer AI Build Script
+  UAudioLab Build Script
   Platform: ${IS_WINDOWS ? 'Windows' : IS_MAC ? 'macOS' : IS_LINUX ? 'Linux' : 'Unknown'}
 ${'='.repeat(60)}
 `, 'magenta');

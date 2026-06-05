@@ -96,7 +96,7 @@ npm run web:dev
 ```bash
 npm run electron:pack:mac
 ```
-构建产物：`release/AudioSlicer AI-1.0.0-arm64.dmg`
+构建产物：`release/UAudioLab-2.0.0-arm64.dmg`
 
 #### Windows
 ```bash
@@ -210,10 +210,6 @@ audio-spliter/
 3. 提交更改 (`git commit -m 'Add some amazing feature'`)
 4. 推送到分支 (`git push origin feature/amazing-feature`)
 5. 打开 Pull Request
-
-## 📄 许可证
-
-[MIT](LICENSE)
 
 ## 🙏 致谢
 

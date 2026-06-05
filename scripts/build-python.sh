@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Build script for AudioSlicer AI Python backend
+# Build script for UAudioLab Python backend
 # Supports: macOS, Linux
 #
 # Usage:
@@ -30,7 +30,7 @@ PLATFORM=$(uname -s)
 ARCH=$(uname -m)
 
 echo -e "${GREEN}========================================${NC}"
-echo -e "${GREEN}AudioSlicer AI Python Backend Builder${NC}"
+echo -e "${GREEN}UAudioLab Python Backend Builder${NC}"
 echo -e "${GREEN}Platform: $PLATFORM ($ARCH)${NC}"
 echo -e "${GREEN}========================================${NC}"
 echo ""

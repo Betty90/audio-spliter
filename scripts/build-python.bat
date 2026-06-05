@@ -1,5 +1,5 @@
 @echo off
-REM Build script for AudioSlicer AI Python backend
+REM Build script for UAudioLab Python backend
 REM Supports: Windows
 REM
 REM Usage:
@@ -11,7 +11,7 @@ REM   dist\server\ - Standalone Python backend executable
 setlocal enabledelayedexpansion
 
 echo ========================================
-echo AudioSlicer AI Python Backend Builder
+echo UAudioLab Python Backend Builder
 echo Platform: Windows
 echo ========================================
 echo.

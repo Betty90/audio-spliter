@@ -51,6 +51,10 @@ wheels/
 backend/audio_uploads/
 backend/temp/
 
+# Caches
+.ruff_cache
+.vite
+
 # Misc
 .env
 .env.*

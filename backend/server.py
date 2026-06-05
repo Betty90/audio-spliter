@@ -551,7 +551,7 @@ def health():
 
 if __name__ == "__main__":
     # Parse command line arguments
-    parser = argparse.ArgumentParser(description="AudioSlicer AI Backend Server")
+    parser = argparse.ArgumentParser(description="UAudioLab Backend Server")
     parser.add_argument(
         "-p",
         "--port",

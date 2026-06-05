@@ -312,7 +312,7 @@ function createLoadingWindow(): BrowserWindow {
     <html>
       <body style="margin:0;display:flex;align-items:center;justify-content:center;height:100vh;background:#1a1a1a;color:#fff;font-family:sans-serif;">
         <div style="text-align:center;">
-          <div style="font-size:18px;margin-bottom:10px;">AudioSlicer AI</div>
+          <div style="font-size:18px;margin-bottom:10px;">UAudioLab</div>
           <div style="font-size:14px;color:#888;">Starting Python backend...</div>
         </div>
       </body>
@@ -590,7 +590,7 @@ app.whenReady().then(async () => {
   } catch (error) {
     logError(`[Main] Failed to start Python backend: ${error}`);
     dialog.showErrorBox(
-      'AudioSlicer AI failed to start',
+      'UAudioLab failed to start',
       `The bundled Python backend could not be started.\n\n${error}`
     );
     loadingWindow?.close();
